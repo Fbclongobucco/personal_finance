@@ -1,25 +1,43 @@
 package br.com.longobucco.personal_finance_app.core.domain;
 
+import br.com.longobucco.personal_finance_app.core.exception.InvalidTransactionException;
+
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.Objects;
 import java.util.UUID;
 
 public class Transaction {
 
-    private UUID id;
-    private String description;
-    private Category category;
-    private BigDecimal amount;
-    private User user;
-    private LocalDateTime createdAt;
-    private LocalDateTime updatedAt;
-    private PaymentMethod paymentMethod;
+    private final UUID id;
+    private final String description;
+    private final Category category;
+    private final BigDecimal amount;
+    private final User user;
+    private final LocalDateTime createdAt;
+    private final LocalDateTime updatedAt;
+    private final PaymentMethod paymentMethod;
     public enum PaymentMethod {
         CASH, CREDIT_CARD, DEBIT_CARD, INVOICE, TICKET, PIX;
     }
 
     private Transaction(UUID id, String description, Category category, BigDecimal amount,
                         User user, LocalDateTime createdAt, LocalDateTime updatedAt, PaymentMethod paymentMethod){
+        if (description == null || description.isBlank()) {
+            throw InvalidTransactionException.blankDescription();
+        }
+        if (category == null) {
+            throw InvalidTransactionException.nullCategory();
+        }
+        if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) {
+            throw InvalidTransactionException.nonPositiveAmount(amount);
+        }
+        if (user == null) {
+            throw InvalidTransactionException.nullUser();
+        }
+        if (paymentMethod == null) {
+            throw InvalidTransactionException.nullPaymentMethod();
+        }
         this.id = id;
         this.description = description;
         this.category = category;
@@ -66,11 +84,27 @@ public class Transaction {
                                      User user, PaymentMethod paymentMethod){
         UUID id = UUID.randomUUID();
         LocalDateTime createdAt = LocalDateTime.now();
-        return new Transaction(id, description, category, amount, user, createdAt, createdAt, paymentMethod);
+        Transaction transaction = new Transaction(id, description, category, amount, user, createdAt, createdAt, paymentMethod);
+        user.addTransaction(transaction);
+        return transaction;
     }
 
     public static Transaction recover(UUID id, String description, Category category, BigDecimal amount,
                                       User user, LocalDateTime createdAt, LocalDateTime updatedAt, PaymentMethod paymentMethod){
-        return new Transaction(id, description, category, amount, user, createdAt, updatedAt, paymentMethod);
+        Transaction transaction = new Transaction(id, description, category, amount, user, createdAt, updatedAt, paymentMethod);
+        user.addTransaction(transaction);
+        return transaction;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (o == null || getClass() != o.getClass()) return false;
+        Transaction that = (Transaction) o;
+        return Objects.equals(id, that.id);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hashCode(id);
     }
 }
