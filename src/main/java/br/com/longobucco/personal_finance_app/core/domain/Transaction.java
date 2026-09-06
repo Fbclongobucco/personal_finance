@@ -23,21 +23,7 @@ public class Transaction {
 
     private Transaction(UUID id, String description, Category category, BigDecimal amount,
                         User user, LocalDateTime createdAt, LocalDateTime updatedAt, PaymentMethod paymentMethod){
-        if (description == null || description.isBlank()) {
-            throw InvalidTransactionException.blankDescription();
-        }
-        if (category == null) {
-            throw InvalidTransactionException.nullCategory();
-        }
-        if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) {
-            throw InvalidTransactionException.nonPositiveAmount(amount);
-        }
-        if (user == null) {
-            throw InvalidTransactionException.nullUser();
-        }
-        if (paymentMethod == null) {
-            throw InvalidTransactionException.nullPaymentMethod();
-        }
+        validate(description, category, amount, user, paymentMethod);
         this.id = id;
         this.description = description;
         this.category = category;
@@ -94,6 +80,24 @@ public class Transaction {
         Transaction transaction = new Transaction(id, description, category, amount, user, createdAt, updatedAt, paymentMethod);
         user.addTransaction(transaction);
         return transaction;
+    }
+
+    private static void validate(String description, Category category, BigDecimal amount, User user, PaymentMethod paymentMethod) {
+        if (description == null || description.isBlank()) {
+            throw InvalidTransactionException.blankDescription();
+        }
+        if (category == null) {
+            throw InvalidTransactionException.nullCategory();
+        }
+        if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) {
+            throw InvalidTransactionException.nonPositiveAmount(amount);
+        }
+        if (user == null) {
+            throw InvalidTransactionException.nullUser();
+        }
+        if (paymentMethod == null) {
+            throw InvalidTransactionException.nullPaymentMethod();
+        }
     }
 
     @Override

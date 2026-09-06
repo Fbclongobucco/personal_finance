@@ -31,12 +31,7 @@ public class Category {
         public abstract BigDecimal apply(BigDecimal balance, BigDecimal amount);
     }
     private Category(UUID id, String name, Type type, LocalDateTime createdAt, LocalDateTime updatedAt){
-        if (name == null || name.isBlank()) {
-            throw InvalidCategoryException.blankName();
-        }
-        if (type == null) {
-            throw InvalidCategoryException.nullType();
-        }
+        validate(name, type);
         this.id = id;
         this.name = name;
         this.type = type;
@@ -72,6 +67,15 @@ public class Category {
 
     public static Category recover(UUID id, String name, Type type, LocalDateTime createdAt, LocalDateTime updatedAt) {
         return new Category(id, name, type, createdAt, updatedAt);
+    }
+
+    private static void validate(String name, Type type) {
+        if (name == null || name.isBlank()) {
+            throw InvalidCategoryException.blankName();
+        }
+        if (type == null) {
+            throw InvalidCategoryException.nullType();
+        }
     }
 
     @Override
