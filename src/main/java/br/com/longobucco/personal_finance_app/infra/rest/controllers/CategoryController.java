@@ -24,7 +24,8 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.List;
 import java.util.UUID;
 
-@Tag(name = "Categories", description = "Income/expense categories used to classify transactions")
+@Tag(name = "Categories", description = "Income/expense categories used to classify transactions — "
+        + "create/delete are restricted to authenticated ADMINs")
 @RestController
 @RequestMapping("/api/categories")
 public class CategoryController {
@@ -35,10 +36,11 @@ public class CategoryController {
         this.categoryUseCase = categoryUseCase;
     }
 
-    @Operation(summary = "Create a category")
+    @Operation(summary = "Create a category", description = "Requires the ADMIN role.")
     @ApiResponses({
             @ApiResponse(responseCode = "201", description = "Category created"),
-            @ApiResponse(responseCode = "400", description = "Validation error")
+            @ApiResponse(responseCode = "400", description = "Validation error"),
+            @ApiResponse(responseCode = "403", description = "Caller is not an ADMIN")
     })
     @PostMapping
     public ResponseEntity<CategoryResponseDto> create(@Valid @RequestBody CategoryRequestDto request) {
@@ -68,10 +70,12 @@ public class CategoryController {
         return ResponseEntity.ok(categoryUseCase.listCategories());
     }
 
-    @Operation(summary = "Delete a category by id")
+    @Operation(summary = "Delete a category by id", description = "Requires the ADMIN role.")
     @ApiResponses({
             @ApiResponse(responseCode = "204", description = "Category deleted"),
-            @ApiResponse(responseCode = "404", description = "Category not found")
+            @ApiResponse(responseCode = "403", description = "Caller is not an ADMIN"),
+            @ApiResponse(responseCode = "404", description = "Category not found"),
+            @ApiResponse(responseCode = "409", description = "Category is still referenced by existing transactions")
     })
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> delete(@PathVariable UUID id) {

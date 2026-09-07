@@ -1,5 +1,6 @@
 package br.com.longobucco.personal_finance_app.infra.rest.controllers;
 
+import tools.jackson.databind.JsonNode;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
 
@@ -35,6 +36,20 @@ class CategoryControllerIntegrationTest extends AbstractControllerIntegrationTes
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"name":"NoToken-%s","type":"INCOME"}
+                                """.formatted(uniqueSuffix())))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void createCategoryAsNonAdminIsForbidden() throws Exception {
+        String adminToken = adminAccessToken();
+        String regularToken = createUserAndLogin(adminToken, "Regular", "regular-%s@example.com".formatted(uniqueSuffix()));
+
+        mockMvc.perform(post("/api/categories")
+                        .header("Authorization", "Bearer " + regularToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"name":"NotAllowed-%s","type":"INCOME"}
                                 """.formatted(uniqueSuffix())))
                 .andExpect(status().isForbidden());
     }
@@ -124,5 +139,29 @@ class CategoryControllerIntegrationTest extends AbstractControllerIntegrationTes
     void deleteCategoryWithoutTokenIsForbidden() throws Exception {
         mockMvc.perform(delete("/api/categories/00000000-0000-0000-0000-000000000000"))
                 .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void deleteCategoryAsNonAdminIsForbidden() throws Exception {
+        String adminToken = adminAccessToken();
+        UUID id = createCategory(adminToken, "Protected-%s".formatted(uniqueSuffix()), "EXPENSE");
+        String regularToken = createUserAndLogin(adminToken, "Regular2", "regular2-%s@example.com".formatted(uniqueSuffix()));
+
+        mockMvc.perform(delete("/api/categories/" + id)
+                        .header("Authorization", "Bearer " + regularToken))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void deleteCategoryStillReferencedByATransactionReturnsConflict() throws Exception {
+        String adminToken = adminAccessToken();
+        UUID categoryId = createCategory(adminToken, "InUse-%s".formatted(uniqueSuffix()), "EXPENSE");
+        JsonNode user = createUser(adminToken, "CategoryUser", "categoryuser-%s@example.com".formatted(uniqueSuffix()));
+        String userToken = login(user.get("email").asText(), "secret123");
+        createTransaction(userToken, categoryId, "Rent", "30.00", UUID.fromString(user.get("id").asText()), "CASH");
+
+        mockMvc.perform(delete("/api/categories/" + categoryId)
+                        .header("Authorization", "Bearer " + adminToken))
+                .andExpect(status().isConflict());
     }
 }

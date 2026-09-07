@@ -7,6 +7,7 @@ import br.com.longobucco.personal_finance_app.application.exception.TransactionN
 import br.com.longobucco.personal_finance_app.application.exception.UserAlreadyExistsException;
 import br.com.longobucco.personal_finance_app.application.exception.UserNotFoundException;
 import br.com.longobucco.personal_finance_app.core.exception.DomainException;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -43,5 +44,11 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(DomainException.class)
     public ProblemDetail handleDomainException(DomainException ex) {
         return ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, ex.getMessage());
+    }
+
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public ProblemDetail handleDataIntegrityViolation(DataIntegrityViolationException ex) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT,
+                "This resource cannot be deleted because it is still referenced by other records");
     }
 }
