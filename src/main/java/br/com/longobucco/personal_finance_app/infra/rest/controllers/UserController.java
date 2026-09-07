@@ -5,6 +5,8 @@ import br.com.longobucco.personal_finance_app.application.dto.user.UserRequestDt
 import br.com.longobucco.personal_finance_app.application.dto.user.UserResponseDto;
 import br.com.longobucco.personal_finance_app.application.usecase.UserUseCase;
 import br.com.longobucco.personal_finance_app.core.domain.Category;
+import br.com.longobucco.personal_finance_app.core.domain.User;
+import br.com.longobucco.personal_finance_app.infra.rest.security.AccessGuard;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -13,6 +15,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -26,7 +29,8 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 
-@Tag(name = "Users", description = "User management — creation is restricted to authenticated ADMINs")
+@Tag(name = "Users", description = "User management — creation here is restricted to authenticated ADMINs; "
+        + "for public self-registration, see POST /auth/register")
 @RestController
 @RequestMapping("/api/users")
 public class UserController {
@@ -50,53 +54,64 @@ public class UserController {
         return ResponseEntity.status(HttpStatus.CREATED).body(created);
     }
 
-    @Operation(summary = "Get a user by id")
+    @Operation(summary = "Get a user by id", description = "Callers may only fetch their own user, unless they are an ADMIN.")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "User found"),
+            @ApiResponse(responseCode = "403", description = "Caller is not the owner and not an ADMIN"),
             @ApiResponse(responseCode = "404", description = "User not found")
     })
     @GetMapping("/{id}")
-    public ResponseEntity<UserResponseDto> getById(@PathVariable UUID id) {
+    public ResponseEntity<UserResponseDto> getById(@PathVariable UUID id, @AuthenticationPrincipal User currentUser) {
+        AccessGuard.requireOwnerOrAdmin(currentUser, id);
         return ResponseEntity.ok(userUseCase.getUserById(id));
     }
 
-    @Operation(summary = "Get a user by email")
+    @Operation(summary = "Get a user by email", description = "Callers may only fetch their own user, unless they are an ADMIN.")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "User found"),
+            @ApiResponse(responseCode = "403", description = "Caller is not the owner and not an ADMIN"),
             @ApiResponse(responseCode = "404", description = "User not found")
     })
     @GetMapping(params = "email")
-    public ResponseEntity<UserResponseDto> getByEmail(@RequestParam String email) {
-        return ResponseEntity.ok(userUseCase.getUserByEmail(email));
+    public ResponseEntity<UserResponseDto> getByEmail(@RequestParam String email, @AuthenticationPrincipal User currentUser) {
+        UserResponseDto user = userUseCase.getUserByEmail(email);
+        AccessGuard.requireOwnerOrAdmin(currentUser, user.id());
+        return ResponseEntity.ok(user);
     }
 
-    @Operation(summary = "Delete a user by id")
+    @Operation(summary = "Delete a user by id", description = "Callers may only delete their own user, unless they are an ADMIN.")
     @ApiResponses({
             @ApiResponse(responseCode = "204", description = "User deleted"),
+            @ApiResponse(responseCode = "403", description = "Caller is not the owner and not an ADMIN"),
             @ApiResponse(responseCode = "404", description = "User not found")
     })
     @DeleteMapping("/{id}")
-    public ResponseEntity<Void> delete(@PathVariable UUID id) {
+    public ResponseEntity<Void> delete(@PathVariable UUID id, @AuthenticationPrincipal User currentUser) {
+        AccessGuard.requireOwnerOrAdmin(currentUser, id);
         userUseCase.deleteUser(id);
         return ResponseEntity.noContent().build();
     }
 
     @Operation(summary = "List a user's transactions",
             description = "Without start/end, returns all of the user's transactions. With start/end, "
-                    + "optionally filtered by category type (INCOME or EXPENSE).")
+                    + "optionally filtered by category type (INCOME or EXPENSE). Callers may only list their own "
+                    + "transactions, unless they are an ADMIN.")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Transactions found"),
+            @ApiResponse(responseCode = "403", description = "Caller is not the owner and not an ADMIN"),
             @ApiResponse(responseCode = "404", description = "User not found")
     })
     @GetMapping("/{id}/transactions")
     public ResponseEntity<List<TransactionResponseDto>> transactions(
             @PathVariable UUID id,
+            @AuthenticationPrincipal User currentUser,
             @Parameter(description = "Period start (inclusive), required together with end")
             @RequestParam(required = false) LocalDateTime start,
             @Parameter(description = "Period end (inclusive), required together with start")
             @RequestParam(required = false) LocalDateTime end,
             @Parameter(description = "Optional category type filter, only applied when start/end are set")
             @RequestParam(required = false) Category.Type type) {
+        AccessGuard.requireOwnerOrAdmin(currentUser, id);
         if (start == null || end == null) {
             return ResponseEntity.ok(userUseCase.getUserTransactions(id));
         }

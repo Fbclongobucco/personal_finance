@@ -25,6 +25,7 @@ import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -202,5 +203,29 @@ class TransactionUseCaseTest {
 
         assertThrows(TransactionNotFoundException.class, () -> transactionUseCase.deleteTransaction(id));
         verify(transactionRepository, never()).delete(any(Transaction.class));
+    }
+
+    @Test
+    void settleTransactionMarksExpenseAsPaidAndSaves() {
+        User user = validUser();
+        Category expense = Category.createCategory("Rent", Category.Type.EXPENSE);
+        Transaction transaction = Transaction.create("Rent", expense, new BigDecimal("30.00"), user,
+                Transaction.PaymentMethod.CASH);
+        when(transactionRepository.findById(transaction.getId())).thenReturn(Optional.of(transaction));
+        when(transactionRepository.save(transaction)).thenReturn(transaction);
+
+        TransactionResponseDto result = transactionUseCase.settleTransaction(transaction.getId());
+
+        assertEquals(transaction.getId(), result.id());
+        assertTrue(result.paid());
+        verify(transactionRepository).save(transaction);
+    }
+
+    @Test
+    void settleTransactionThrowsTransactionNotFoundExceptionWhenNotFound() {
+        UUID id = UUID.randomUUID();
+        when(transactionRepository.findById(id)).thenReturn(Optional.empty());
+
+        assertThrows(TransactionNotFoundException.class, () -> transactionUseCase.settleTransaction(id));
     }
 }

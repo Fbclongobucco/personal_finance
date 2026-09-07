@@ -6,6 +6,7 @@ import org.junit.jupiter.api.Test;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -21,6 +22,10 @@ class TransactionTest {
 
     private Category validCategory() {
         return Category.createCategory("Salary", Category.Type.INCOME);
+    }
+
+    private Category expenseCategory() {
+        return Category.createCategory("Rent", Category.Type.EXPENSE);
     }
 
     @Test
@@ -94,5 +99,60 @@ class TransactionTest {
 
         assertThrows(InvalidTransactionException.class,
                 () -> Transaction.create("Salary", category, new BigDecimal("50.00"), user, null));
+    }
+
+    @Test
+    void incomeTransactionIsAlwaysPaid() {
+        User user = validUser();
+        Category category = validCategory();
+
+        Transaction transaction = Transaction.create("Salary", category, new BigDecimal("50.00"), user,
+                Transaction.PaymentMethod.PIX);
+
+        assertTrue(transaction.isPaid());
+    }
+
+    @Test
+    void expenseTransactionStartsUnpaidByDefault() {
+        User user = validUser();
+        Category category = expenseCategory();
+
+        Transaction transaction = Transaction.create("Rent", category, new BigDecimal("30.00"), user,
+                Transaction.PaymentMethod.CASH);
+
+        assertFalse(transaction.isPaid());
+    }
+
+    @Test
+    void expenseTransactionCanBeCreatedAlreadyPaid() {
+        User user = validUser();
+        Category category = expenseCategory();
+
+        Transaction transaction = Transaction.create("Rent", category, new BigDecimal("30.00"), user,
+                Transaction.PaymentMethod.CASH, true);
+
+        assertTrue(transaction.isPaid());
+    }
+
+    @Test
+    void settleMarksExpenseAsPaid() {
+        User user = validUser();
+        Category category = expenseCategory();
+        Transaction transaction = Transaction.create("Rent", category, new BigDecimal("30.00"), user,
+                Transaction.PaymentMethod.CASH);
+
+        transaction.settle();
+
+        assertTrue(transaction.isPaid());
+    }
+
+    @Test
+    void settlingAnIncomeTransactionThrows() {
+        User user = validUser();
+        Category category = validCategory();
+        Transaction transaction = Transaction.create("Salary", category, new BigDecimal("50.00"), user,
+                Transaction.PaymentMethod.PIX);
+
+        assertThrows(InvalidTransactionException.class, transaction::settle);
     }
 }

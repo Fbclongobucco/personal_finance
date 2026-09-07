@@ -9,5 +9,5 @@ import java.util.UUID;
 
 public record TransactionResponseDto(UUID id, String description, CategoryResponseDto category, BigDecimal amount,
                                      UUID userId, Transaction.PaymentMethod paymentMethod,
-                                     LocalDateTime createdAt, LocalDateTime updatedAt) {
+                                     LocalDateTime createdAt, LocalDateTime updatedAt, boolean paid) {
 }

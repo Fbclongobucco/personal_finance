@@ -72,6 +72,25 @@ abstract class AbstractControllerIntegrationTest {
         return objectMapper.readTree(body);
     }
 
+    /** Creates a regular user (as admin) and returns their own access token. */
+    protected String createUserAndLogin(String adminToken, String name, String email) throws Exception {
+        createUser(adminToken, name, email);
+        return login(email, "secret123");
+    }
+
+    protected JsonNode createTransaction(String token, UUID categoryId, String description, String amount,
+                                         UUID userId, String paymentMethod) throws Exception {
+        String body = mockMvc.perform(post("/api/transactions")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"description":"%s","categoryId":"%s","amount":%s,"userId":"%s","paymentMethod":"%s"}
+                                """.formatted(description, categoryId, amount, userId, paymentMethod)))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        return objectMapper.readTree(body);
+    }
+
     private record LoginRequest(String email, String password) {
     }
 }

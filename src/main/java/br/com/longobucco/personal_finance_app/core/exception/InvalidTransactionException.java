@@ -27,4 +27,8 @@ public class InvalidTransactionException extends DomainException {
     public static InvalidTransactionException nullPaymentMethod() {
         return new InvalidTransactionException("Transaction payment method must not be null");
     }
+
+    public static InvalidTransactionException notExpense() {
+        return new InvalidTransactionException("Only EXPENSE transactions can be settled");
+    }
 }

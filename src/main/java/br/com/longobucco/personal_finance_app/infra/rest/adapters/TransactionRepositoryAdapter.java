@@ -81,7 +81,7 @@ public class TransactionRepositoryAdapter implements TransactionRepository {
         CategoryEntity categoryRef = categoryJpaRepository.getReferenceById(transaction.getCategory().getId());
         return new TransactionEntity(transaction.getId(), transaction.getDescription(), categoryRef,
                 transaction.getAmount(), userRef, transaction.getCreatedAt(), transaction.getUpdatedAt(),
-                toEntityPaymentMethod(transaction.getPaymentMethod()));
+                toEntityPaymentMethod(transaction.getPaymentMethod()), transaction.isPaid());
     }
 
     private static List<Transaction> toDomainList(List<TransactionEntity> entities) {
@@ -97,7 +97,8 @@ public class TransactionRepositoryAdapter implements TransactionRepository {
     private static Transaction toDomain(TransactionEntity entity, User user) {
         Category category = CategoryRepositoryAdapter.toDomain(entity.getCategory());
         return Transaction.recover(entity.getId(), entity.getDescription(), category, entity.getAmount(), user,
-                entity.getCreatedAt(), entity.getUpdatedAt(), toDomainPaymentMethod(entity.getPaymentMethod()));
+                entity.getCreatedAt(), entity.getUpdatedAt(), toDomainPaymentMethod(entity.getPaymentMethod()),
+                entity.isPaid());
     }
 
     private static Transaction.PaymentMethod toDomainPaymentMethod(TransactionEntity.PaymentMethod paymentMethod) {

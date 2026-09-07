@@ -143,6 +143,58 @@ class UserControllerIntegrationTest extends AbstractControllerIntegrationTest {
     }
 
     @Test
+    void getByIdAsAnotherUserIsForbidden() throws Exception {
+        String adminToken = adminAccessToken();
+        JsonNode owner = createUser(adminToken, "Owner", "owner-%s@example.com".formatted(uniqueSuffix()));
+        String intruderEmail = "intruder-%s@example.com".formatted(uniqueSuffix());
+        createUser(adminToken, "Intruder", intruderEmail);
+        String intruderToken = login(intruderEmail, "secret123");
+
+        mockMvc.perform(get("/api/users/" + owner.get("id").asText())
+                        .header("Authorization", "Bearer " + intruderToken))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void getByIdAsSelfIsAllowed() throws Exception {
+        String adminToken = adminAccessToken();
+        String selfEmail = "self-%s@example.com".formatted(uniqueSuffix());
+        JsonNode self = createUser(adminToken, "Self", selfEmail);
+        String selfToken = login(selfEmail, "secret123");
+
+        mockMvc.perform(get("/api/users/" + self.get("id").asText())
+                        .header("Authorization", "Bearer " + selfToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(self.get("id").asText()));
+    }
+
+    @Test
+    void deleteUserAsAnotherUserIsForbidden() throws Exception {
+        String adminToken = adminAccessToken();
+        JsonNode owner = createUser(adminToken, "Owner2", "owner2-%s@example.com".formatted(uniqueSuffix()));
+        String intruderEmail = "intruder2-%s@example.com".formatted(uniqueSuffix());
+        createUser(adminToken, "Intruder2", intruderEmail);
+        String intruderToken = login(intruderEmail, "secret123");
+
+        mockMvc.perform(delete("/api/users/" + owner.get("id").asText())
+                        .header("Authorization", "Bearer " + intruderToken))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void getTransactionsForAnotherUserIsForbidden() throws Exception {
+        String adminToken = adminAccessToken();
+        JsonNode owner = createUser(adminToken, "Owner3", "owner3-%s@example.com".formatted(uniqueSuffix()));
+        String intruderEmail = "intruder3-%s@example.com".formatted(uniqueSuffix());
+        createUser(adminToken, "Intruder3", intruderEmail);
+        String intruderToken = login(intruderEmail, "secret123");
+
+        mockMvc.perform(get("/api/users/" + owner.get("id").asText() + "/transactions")
+                        .header("Authorization", "Bearer " + intruderToken))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
     void getTransactionsForNewUserReturnsEmptyList() throws Exception {
         String token = adminAccessToken();
         JsonNode user = createUser(token, "No Transactions", "notx-%s@example.com".formatted(uniqueSuffix()));

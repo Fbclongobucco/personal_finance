@@ -17,12 +17,14 @@ public class Transaction {
     private final LocalDateTime createdAt;
     private final LocalDateTime updatedAt;
     private final PaymentMethod paymentMethod;
+    private boolean paid;
     public enum PaymentMethod {
         CASH, CREDIT_CARD, DEBIT_CARD, INVOICE, TICKET, PIX;
     }
 
     private Transaction(UUID id, String description, Category category, BigDecimal amount,
-                        User user, LocalDateTime createdAt, LocalDateTime updatedAt, PaymentMethod paymentMethod){
+                        User user, LocalDateTime createdAt, LocalDateTime updatedAt, PaymentMethod paymentMethod,
+                        boolean paid){
         validate(description, category, amount, user, paymentMethod);
         this.id = id;
         this.description = description;
@@ -32,6 +34,8 @@ public class Transaction {
         this.createdAt = createdAt;
         this.updatedAt = updatedAt;
         this.paymentMethod = paymentMethod;
+        // Settlement only applies to expenses; an income is always considered settled.
+        this.paid = category.getType() == Category.Type.EXPENSE ? paid : true;
     }
 
     public UUID getId() {
@@ -66,20 +70,54 @@ public class Transaction {
         return paymentMethod;
     }
 
+    public boolean isPaid() {
+        return paid;
+    }
+
+    /**
+     * Marks an expense as settled ("dar baixa"). Only meaningful for EXPENSE transactions — an
+     * income is already always considered settled.
+     */
+    public void settle() {
+        if (category.getType() != Category.Type.EXPENSE) {
+            throw InvalidTransactionException.notExpense();
+        }
+        this.paid = true;
+    }
+
     public static Transaction create(String description, Category category, BigDecimal amount,
                                      User user, PaymentMethod paymentMethod){
+        return create(description, category, amount, user, paymentMethod, defaultPaid(category));
+    }
+
+    public static Transaction create(String description, Category category, BigDecimal amount,
+                                     User user, PaymentMethod paymentMethod, boolean paid){
         UUID id = UUID.randomUUID();
         LocalDateTime createdAt = LocalDateTime.now();
-        Transaction transaction = new Transaction(id, description, category, amount, user, createdAt, createdAt, paymentMethod);
+        Transaction transaction = new Transaction(id, description, category, amount, user, createdAt, createdAt,
+                paymentMethod, paid);
         user.addTransaction(transaction);
         return transaction;
     }
 
     public static Transaction recover(UUID id, String description, Category category, BigDecimal amount,
                                       User user, LocalDateTime createdAt, LocalDateTime updatedAt, PaymentMethod paymentMethod){
-        Transaction transaction = new Transaction(id, description, category, amount, user, createdAt, updatedAt, paymentMethod);
+        return recover(id, description, category, amount, user, createdAt, updatedAt, paymentMethod,
+                defaultPaid(category));
+    }
+
+    public static Transaction recover(UUID id, String description, Category category, BigDecimal amount,
+                                      User user, LocalDateTime createdAt, LocalDateTime updatedAt,
+                                      PaymentMethod paymentMethod, boolean paid){
+        Transaction transaction = new Transaction(id, description, category, amount, user, createdAt, updatedAt,
+                paymentMethod, paid);
         user.addTransaction(transaction);
         return transaction;
+    }
+
+    /** New expenses start pending (unpaid) by default; incomes are always settled. */
+    private static boolean defaultPaid(Category category) {
+        return category == null || category.getType() != Category.Type.EXPENSE;
     }
 
     private static void validate(String description, Category category, BigDecimal amount, User user, PaymentMethod paymentMethod) {

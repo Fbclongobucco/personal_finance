@@ -76,6 +76,15 @@ public class TransactionUseCase {
         transactionRepository.delete(transaction);
     }
 
+    /** Marks an EXPENSE transaction as settled ("dar baixa"). */
+    public TransactionResponseDto settleTransaction(UUID id) {
+        Transaction transaction = transactionRepository.findById(id)
+                .orElseThrow(() -> TransactionNotFoundException.withId(id));
+        transaction.settle();
+        Transaction saved = transactionRepository.save(transaction);
+        return TransactionMapper.toResponseDto(saved);
+    }
+
     private User findUser(UUID userId) {
         return userRepository.findById(userId)
                 .orElseThrow(() -> UserNotFoundException.withId(userId));

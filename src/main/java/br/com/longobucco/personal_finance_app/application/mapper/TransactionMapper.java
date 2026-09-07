@@ -12,13 +12,16 @@ public final class TransactionMapper {
     }
 
     public static Transaction toDomain(TransactionRequestDto dto, User user, Category category) {
-        return Transaction.create(dto.description(), category, dto.amount(), user, dto.paymentMethod());
+        if (dto.paid() == null) {
+            return Transaction.create(dto.description(), category, dto.amount(), user, dto.paymentMethod());
+        }
+        return Transaction.create(dto.description(), category, dto.amount(), user, dto.paymentMethod(), dto.paid());
     }
 
     public static TransactionResponseDto toResponseDto(Transaction transaction) {
         return new TransactionResponseDto(transaction.getId(), transaction.getDescription(),
                 CategoryMapper.toResponseDto(transaction.getCategory()), transaction.getAmount(),
                 transaction.getUser().getId(), transaction.getPaymentMethod(),
-                transaction.getCreatedAt(), transaction.getUpdatedAt());
+                transaction.getCreatedAt(), transaction.getUpdatedAt(), transaction.isPaid());
     }
 }

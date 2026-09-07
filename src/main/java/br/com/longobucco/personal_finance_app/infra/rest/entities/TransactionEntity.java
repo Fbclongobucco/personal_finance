@@ -47,6 +47,9 @@ public class TransactionEntity {
     @Column(nullable = false)
     private PaymentMethod paymentMethod;
 
+    @Column(nullable = false)
+    private boolean paid;
+
     public enum PaymentMethod {
         CASH, CREDIT_CARD, DEBIT_CARD, INVOICE, TICKET, PIX
     }
@@ -56,7 +59,7 @@ public class TransactionEntity {
 
     public TransactionEntity(UUID id, String description, CategoryEntity category, BigDecimal amount,
                              UserEntity user, LocalDateTime createdAt, LocalDateTime updatedAt,
-                             PaymentMethod paymentMethod) {
+                             PaymentMethod paymentMethod, boolean paid) {
         this.id = id;
         this.description = description;
         this.category = category;
@@ -65,6 +68,7 @@ public class TransactionEntity {
         this.createdAt = createdAt;
         this.updatedAt = updatedAt;
         this.paymentMethod = paymentMethod;
+        this.paid = paid;
     }
 
     public UUID getId() {
@@ -129,6 +133,14 @@ public class TransactionEntity {
 
     public void setPaymentMethod(PaymentMethod paymentMethod) {
         this.paymentMethod = paymentMethod;
+    }
+
+    public boolean isPaid() {
+        return paid;
+    }
+
+    public void setPaid(boolean paid) {
+        this.paid = paid;
     }
 
     @Override

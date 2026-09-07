@@ -10,6 +10,57 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class AuthControllerIntegrationTest extends AbstractControllerIntegrationTest {
 
     @Test
+    void registerWithoutTokenCreatesRegularUser() throws Exception {
+        String email = "signup-%s@example.com".formatted(uniqueSuffix());
+
+        mockMvc.perform(post("/auth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"name":"Self Signup","email":"%s","password":"secret123","phone":"11987654321","initialBalance":0}
+                                """.formatted(email)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.email").value(email))
+                .andExpect(jsonPath("$.role").value("USER"))
+                .andExpect(jsonPath("$.password").doesNotExist());
+
+        mockMvc.perform(post("/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"email":"%s","password":"secret123"}
+                                """.formatted(email)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.accessToken").isNotEmpty());
+    }
+
+    @Test
+    void registerWithDuplicateEmailReturnsConflict() throws Exception {
+        String email = "dupsignup-%s@example.com".formatted(uniqueSuffix());
+        mockMvc.perform(post("/auth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"name":"First","email":"%s","password":"secret123","phone":"11987654321","initialBalance":0}
+                                """.formatted(email)))
+                .andExpect(status().isCreated());
+
+        mockMvc.perform(post("/auth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"name":"Second","email":"%s","password":"secret123","phone":"11987654321","initialBalance":0}
+                                """.formatted(email)))
+                .andExpect(status().isConflict());
+    }
+
+    @Test
+    void registerWithBlankNameReturnsBadRequest() throws Exception {
+        mockMvc.perform(post("/auth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"name":"","email":"blanksignup-%s@example.com","password":"secret123","phone":"11987654321","initialBalance":0}
+                                """.formatted(uniqueSuffix())))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
     void loginWithValidAdminCredentialsReturnsTokenPair() throws Exception {
         mockMvc.perform(post("/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
