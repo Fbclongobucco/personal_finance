@@ -17,8 +17,8 @@ public class UseCaseConfig {
 
     @Bean
     public UserUseCase userUseCase(UserRepository userRepository, TransactionRepository transactionRepository,
-                                    PasswordHasher passwordHasher) {
-        return new UserUseCase(userRepository, transactionRepository, passwordHasher);
+                                    CategoryRepository categoryRepository, PasswordHasher passwordHasher) {
+        return new UserUseCase(userRepository, transactionRepository, categoryRepository, passwordHasher);
     }
 
     @Bean

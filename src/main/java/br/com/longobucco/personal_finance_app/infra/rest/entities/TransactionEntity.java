@@ -9,7 +9,6 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
-import org.hibernate.annotations.BatchSize;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -33,9 +32,8 @@ public class TransactionEntity {
     @Column(nullable = false, precision = 19, scale = 2)
     private BigDecimal amount;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "user_id", nullable = false)
-    private UserEntity user;
+    @Column(name = "user_id", nullable = false)
+    private UUID userId;
 
     @Column(nullable = false)
     private LocalDateTime createdAt;
@@ -58,13 +56,13 @@ public class TransactionEntity {
     }
 
     public TransactionEntity(UUID id, String description, CategoryEntity category, BigDecimal amount,
-                             UserEntity user, LocalDateTime createdAt, LocalDateTime updatedAt,
+                             UUID userId, LocalDateTime createdAt, LocalDateTime updatedAt,
                              PaymentMethod paymentMethod, boolean paid) {
         this.id = id;
         this.description = description;
         this.category = category;
         this.amount = amount;
-        this.user = user;
+        this.userId = userId;
         this.createdAt = createdAt;
         this.updatedAt = updatedAt;
         this.paymentMethod = paymentMethod;
@@ -103,12 +101,12 @@ public class TransactionEntity {
         this.amount = amount;
     }
 
-    public UserEntity getUser() {
-        return user;
+    public UUID getUserId() {
+        return userId;
     }
 
-    public void setUser(UserEntity user) {
-        this.user = user;
+    public void setUserId(UUID userId) {
+        this.userId = userId;
     }
 
     public LocalDateTime getCreatedAt() {

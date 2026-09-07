@@ -4,49 +4,62 @@ import br.com.longobucco.personal_finance_app.application.dto.transaction.Transa
 import br.com.longobucco.personal_finance_app.application.dto.transaction.TransactionResponseDto;
 import br.com.longobucco.personal_finance_app.core.domain.Category;
 import br.com.longobucco.personal_finance_app.core.domain.Transaction;
-import br.com.longobucco.personal_finance_app.core.domain.User;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
+import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class TransactionMapperTest {
 
-    private User validUser() {
-        return User.createUser("John Doe", "john.doe@example.com", "11987654321", "secret123",
-                new BigDecimal("100.00"));
-    }
+    private final UUID userId = UUID.randomUUID();
 
-    private Category validCategory() {
-        return Category.createCategory("Salary", Category.Type.INCOME);
+    private Category ownCategory(Category.Type type) {
+        return Category.createCategory("Salary", type, userId);
     }
 
     @Test
-    void toDomainMapsEachFieldAndAttachesTransactionToUser() {
-        User user = validUser();
-        Category category = validCategory();
+    void toDomainMapsEachFieldToItsMatchingDomainArgument() {
+        Category category = ownCategory(Category.Type.INCOME);
         TransactionRequestDto dto = new TransactionRequestDto("Salary", category.getId(),
-                new BigDecimal("50.00"), user.getId(), Transaction.PaymentMethod.PIX);
+                new BigDecimal("50.00"), userId, Transaction.PaymentMethod.PIX);
 
-        Transaction transaction = TransactionMapper.toDomain(dto, user, category);
+        Transaction transaction = TransactionMapper.toDomain(dto, category);
 
         assertNotNull(transaction.getId());
         assertEquals("Salary", transaction.getDescription());
         assertEquals(category, transaction.getCategory());
         assertEquals(new BigDecimal("50.00"), transaction.getAmount());
-        assertEquals(user, transaction.getUser());
+        assertEquals(userId, transaction.getUserId());
         assertEquals(Transaction.PaymentMethod.PIX, transaction.getPaymentMethod());
-        assertTrue(user.getTransactions().contains(transaction));
+    }
+
+    @Test
+    void toDomainLeavesAnExpensePendingWhenTheRequestDoesNotSayOtherwise() {
+        Category category = ownCategory(Category.Type.EXPENSE);
+        TransactionRequestDto dto = new TransactionRequestDto("Rent", category.getId(),
+                new BigDecimal("30.00"), userId, Transaction.PaymentMethod.CASH);
+
+        assertFalse(TransactionMapper.toDomain(dto, category).isPaid());
+    }
+
+    @Test
+    void toDomainHonoursAnExplicitPaidFlagOnAnExpense() {
+        Category category = ownCategory(Category.Type.EXPENSE);
+        TransactionRequestDto dto = new TransactionRequestDto("Rent", category.getId(),
+                new BigDecimal("30.00"), userId, Transaction.PaymentMethod.CASH, true);
+
+        assertTrue(TransactionMapper.toDomain(dto, category).isPaid());
     }
 
     @Test
     void toResponseDtoMapsEachDomainFieldIncludingNestedCategoryAndUserId() {
-        User user = validUser();
-        Category category = validCategory();
-        Transaction transaction = Transaction.create("Salary", category, new BigDecimal("50.00"), user,
+        Category category = ownCategory(Category.Type.INCOME);
+        Transaction transaction = Transaction.create("Salary", category, new BigDecimal("50.00"), userId,
                 Transaction.PaymentMethod.PIX);
 
         TransactionResponseDto dto = TransactionMapper.toResponseDto(transaction);
@@ -57,7 +70,7 @@ class TransactionMapperTest {
         assertEquals(category.getName(), dto.category().name());
         assertEquals(category.getType(), dto.category().type());
         assertEquals(transaction.getAmount(), dto.amount());
-        assertEquals(user.getId(), dto.userId());
+        assertEquals(userId, dto.userId());
         assertEquals(transaction.getPaymentMethod(), dto.paymentMethod());
         assertEquals(transaction.getCreatedAt(), dto.createdAt());
         assertEquals(transaction.getUpdatedAt(), dto.updatedAt());

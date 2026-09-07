@@ -1,13 +1,10 @@
 package br.com.longobucco.personal_finance_app.core.domain;
 
-import br.com.longobucco.personal_finance_app.core.exception.InvalidPeriodException;
 import br.com.longobucco.personal_finance_app.core.exception.InvalidUserException;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.util.List;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -25,6 +22,16 @@ class UserTest {
                 new BigDecimal("100.00"));
     }
 
+    private Transaction incomeOf(User user, BigDecimal amount) {
+        Category income = Category.createCategory("Salary", Category.Type.INCOME, user.getId());
+        return Transaction.create("Salary", income, amount, user.getId(), Transaction.PaymentMethod.PIX);
+    }
+
+    private Transaction expenseOf(User user, BigDecimal amount) {
+        Category expense = Category.createCategory("Rent", Category.Type.EXPENSE, user.getId());
+        return Transaction.create("Rent", expense, amount, user.getId(), Transaction.PaymentMethod.CASH);
+    }
+
     @Test
     void createsUserWithValidData() {
         User user = validUser();
@@ -34,8 +41,8 @@ class UserTest {
         assertEquals("john.doe@example.com", user.getEmail());
         assertEquals("11987654321", user.getPhone());
         assertEquals(User.Role.USER, user.getRole());
+        assertFalse(user.isAdmin());
         assertEquals(new BigDecimal("100.00"), user.getBalance());
-        assertTrue(user.getTransactions().isEmpty());
     }
 
     @Test
@@ -44,6 +51,7 @@ class UserTest {
                 BigDecimal.ZERO, TODAY, TODAY);
 
         assertEquals(User.Role.ADMIN, admin.getRole());
+        assertTrue(admin.isAdmin());
     }
 
     @Test
@@ -104,146 +112,104 @@ class UserTest {
     }
 
     @Test
-    void getTransactionsIsUnmodifiable() {
+    void applyingIncomeTransactionIncreasesBalance() {
         User user = validUser();
 
-        assertThrows(UnsupportedOperationException.class,
-                () -> user.getTransactions().add(null));
-    }
-
-    @Test
-    void addingIncomeTransactionIncreasesBalance() {
-        User user = validUser();
-        Category income = Category.createCategory("Salary", Category.Type.INCOME);
-
-        Transaction.create("Salary", income, new BigDecimal("50.00"), user, Transaction.PaymentMethod.PIX);
+        user.applyTransaction(incomeOf(user, new BigDecimal("50.00")));
 
         assertEquals(new BigDecimal("150.00"), user.getBalance());
     }
 
     @Test
-    void addingExpenseTransactionDecreasesBalance() {
+    void applyingExpenseTransactionDecreasesBalance() {
         User user = validUser();
-        Category expense = Category.createCategory("Rent", Category.Type.EXPENSE);
 
-        Transaction.create("Rent", expense, new BigDecimal("30.00"), user, Transaction.PaymentMethod.CASH);
+        user.applyTransaction(expenseOf(user, new BigDecimal("30.00")));
 
         assertEquals(new BigDecimal("70.00"), user.getBalance());
     }
 
     @Test
-    void removingIncomeTransactionReversesBalance() {
+    void reversingIncomeTransactionRestoresBalance() {
         User user = validUser();
-        Category income = Category.createCategory("Salary", Category.Type.INCOME);
-        Transaction transaction = Transaction.create("Salary", income, new BigDecimal("50.00"), user,
-                Transaction.PaymentMethod.PIX);
+        Transaction transaction = incomeOf(user, new BigDecimal("50.00"));
+        user.applyTransaction(transaction);
 
-        user.removeTransaction(transaction);
-
-        assertEquals(new BigDecimal("100.00"), user.getBalance());
-        assertFalse(user.getTransactions().contains(transaction));
-    }
-
-    @Test
-    void removingExpenseTransactionReversesBalance() {
-        User user = validUser();
-        Category expense = Category.createCategory("Rent", Category.Type.EXPENSE);
-        Transaction transaction = Transaction.create("Rent", expense, new BigDecimal("30.00"), user,
-                Transaction.PaymentMethod.CASH);
-
-        user.removeTransaction(transaction);
-
-        assertEquals(new BigDecimal("100.00"), user.getBalance());
-        assertFalse(user.getTransactions().contains(transaction));
-    }
-
-    @Test
-    void attachingAReconstitutedTransactionDoesNotReapplyItsEffectOnBalance() {
-        User user = validUser();
-        Category income = Category.createCategory("Salary", Category.Type.INCOME);
-
-        Transaction.recover(UUID.randomUUID(), "Salary", income, new BigDecimal("50.00"), user,
-                LocalDateTime.now(), LocalDateTime.now(), Transaction.PaymentMethod.PIX);
+        user.reverseTransaction(transaction);
 
         assertEquals(new BigDecimal("100.00"), user.getBalance());
     }
 
-    private Transaction transactionAt(User user, Category category, BigDecimal amount, LocalDateTime createdAt) {
-        return Transaction.recover(UUID.randomUUID(), "Transaction", category, amount, user,
-                createdAt, createdAt, Transaction.PaymentMethod.CASH);
+    @Test
+    void reversingExpenseTransactionRestoresBalance() {
+        User user = validUser();
+        Transaction transaction = expenseOf(user, new BigDecimal("30.00"));
+        user.applyTransaction(transaction);
+
+        user.reverseTransaction(transaction);
+
+        assertEquals(new BigDecimal("100.00"), user.getBalance());
     }
 
     @Test
-    void getTransactionsBetweenReturnsOnlyTransactionsWithinRange() {
+    void throwsWhenApplyingATransactionThatBelongsToAnotherUser() {
         User user = validUser();
-        Category expense = Category.createCategory("Rent", Category.Type.EXPENSE);
-        Transaction inRange = transactionAt(user, expense, new BigDecimal("30.00"),
-                LocalDateTime.of(2026, 1, 15, 10, 0));
-        Transaction outOfRange = transactionAt(user, expense, new BigDecimal("40.00"),
-                LocalDateTime.of(2026, 3, 1, 10, 0));
+        User other = User.createUser("Jane Doe", "jane.doe@example.com", "11987654321", "secret123",
+                BigDecimal.ZERO);
+        Transaction othersTransaction = incomeOf(other, new BigDecimal("50.00"));
 
-        List<Transaction> result = user.getTransactionsBetween(
-                LocalDateTime.of(2026, 1, 1, 0, 0), LocalDateTime.of(2026, 1, 31, 23, 59));
-
-        assertTrue(result.contains(inRange));
-        assertFalse(result.contains(outOfRange));
+        assertThrows(InvalidUserException.class, () -> user.applyTransaction(othersTransaction));
     }
 
     @Test
-    void getExpensesBetweenReturnsOnlyExpenseTransactions() {
+    void throwsWhenReversingATransactionThatBelongsToAnotherUser() {
         User user = validUser();
-        Category income = Category.createCategory("Salary", Category.Type.INCOME);
-        Category expense = Category.createCategory("Rent", Category.Type.EXPENSE);
-        LocalDateTime date = LocalDateTime.of(2026, 1, 15, 10, 0);
-        Transaction rent = transactionAt(user, expense, new BigDecimal("30.00"), date);
-        Transaction salary = transactionAt(user, income, new BigDecimal("1000.00"), date);
+        User other = User.createUser("Jane Doe", "jane.doe@example.com", "11987654321", "secret123",
+                BigDecimal.ZERO);
+        Transaction othersTransaction = incomeOf(other, new BigDecimal("50.00"));
 
-        List<Transaction> result = user.getExpensesBetween(
-                LocalDateTime.of(2026, 1, 1, 0, 0), LocalDateTime.of(2026, 1, 31, 23, 59));
-
-        assertTrue(result.contains(rent));
-        assertFalse(result.contains(salary));
+        assertThrows(InvalidUserException.class, () -> user.reverseTransaction(othersTransaction));
     }
 
     @Test
-    void getIncomesBetweenReturnsOnlyIncomeTransactions() {
+    void settledBalanceAddsBackTheStillPendingExpenses() {
         User user = validUser();
-        Category income = Category.createCategory("Salary", Category.Type.INCOME);
-        Category expense = Category.createCategory("Rent", Category.Type.EXPENSE);
-        LocalDateTime date = LocalDateTime.of(2026, 1, 15, 10, 0);
-        Transaction rent = transactionAt(user, expense, new BigDecimal("30.00"), date);
-        Transaction salary = transactionAt(user, income, new BigDecimal("1000.00"), date);
+        user.applyTransaction(expenseOf(user, new BigDecimal("30.00")));
 
-        List<Transaction> result = user.getIncomesBetween(
-                LocalDateTime.of(2026, 1, 1, 0, 0), LocalDateTime.of(2026, 1, 31, 23, 59));
-
-        assertTrue(result.contains(salary));
-        assertFalse(result.contains(rent));
+        assertEquals(new BigDecimal("70.00"), user.getBalance());
+        assertEquals(new BigDecimal("100.00"), user.settledBalance(new BigDecimal("30.00")));
     }
 
     @Test
-    void throwsInvalidPeriodExceptionWhenStartIsNull() {
+    void settledBalanceEqualsBalanceWhenNothingIsPending() {
         User user = validUser();
+        user.applyTransaction(incomeOf(user, new BigDecimal("50.00")));
 
-        assertThrows(InvalidPeriodException.class,
-                () -> user.getTransactionsBetween(null, LocalDateTime.now()));
+        assertEquals(user.getBalance(), user.settledBalance(BigDecimal.ZERO));
     }
 
     @Test
-    void throwsInvalidPeriodExceptionWhenEndIsNull() {
+    void settledBalanceThrowsWhenPendingTotalIsNull() {
         User user = validUser();
 
-        assertThrows(InvalidPeriodException.class,
-                () -> user.getTransactionsBetween(LocalDateTime.now(), null));
+        assertThrows(InvalidUserException.class, () -> user.settledBalance(null));
     }
 
     @Test
-    void throwsInvalidPeriodExceptionWhenStartIsAfterEnd() {
+    void settledBalanceThrowsWhenPendingTotalIsNegative() {
         User user = validUser();
-        LocalDateTime start = LocalDateTime.of(2026, 2, 1, 0, 0);
-        LocalDateTime end = LocalDateTime.of(2026, 1, 1, 0, 0);
 
-        assertThrows(InvalidPeriodException.class,
-                () -> user.getTransactionsBetween(start, end));
+        assertThrows(InvalidUserException.class, () -> user.settledBalance(new BigDecimal("-1.00")));
+    }
+
+    @Test
+    void recoverKeepsTheProvidedIdentityAndRole() {
+        UUID id = UUID.randomUUID();
+
+        User user = User.recover(id, "John Doe", "john.doe@example.com", "11987654321", "hashed",
+                User.Role.ADMIN, new BigDecimal("10.00"), TODAY, TODAY);
+
+        assertEquals(id, user.getId());
+        assertTrue(user.isAdmin());
     }
 }

@@ -14,8 +14,6 @@ public record TransactionRequestDto(@NotBlank String description,
                                     @NotNull UUID userId,
                                     @NotNull Transaction.PaymentMethod paymentMethod,
                                     Boolean paid) {
-
-    /** Only meaningful for EXPENSE transactions; ignored for INCOME (always settled). Defaults to unpaid. */
     public TransactionRequestDto(String description, UUID categoryId, BigDecimal amount, UUID userId,
                                  Transaction.PaymentMethod paymentMethod) {
         this(description, categoryId, amount, userId, paymentMethod, null);

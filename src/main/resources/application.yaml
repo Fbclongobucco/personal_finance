@@ -3,6 +3,8 @@ spring:
     name: personal_finance_app
   profiles:
     active: ${SPRING_PROFILES_ACTIVE:h2}
+  jpa:
+    open-in-view: false
   autoconfigure:
     exclude: org.springframework.boot.security.autoconfigure.UserDetailsServiceAutoConfiguration
 
@@ -13,6 +15,6 @@ app:
     refresh-token-expiration-ms: 604800000
   admin:
     name: Administrator
-    email: ${APP_ADMIN_EMAIL:admin123@personalfinance.local}
+    email: ${APP_ADMIN_EMAIL:admin@personalfinance.local}
     phone: "00000000000"
     password: ${APP_ADMIN_PASSWORD:admin123}

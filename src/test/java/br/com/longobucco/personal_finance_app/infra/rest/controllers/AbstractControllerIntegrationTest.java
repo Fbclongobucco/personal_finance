@@ -13,13 +13,6 @@ import java.util.UUID;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-/**
- * Boots the full Spring context (real JPA repositories against the h2 profile's in-memory
- * database, real security filter chain) and drives every endpoint exclusively through MockMvc, the
- * same way a real HTTP client would. The h2 database is shared across all test classes in this
- * run (Spring caches the context), so every test creates its own uniquely-named fixtures instead
- * of assuming a clean database.
- */
 @SpringBootTest
 @AutoConfigureMockMvc
 abstract class AbstractControllerIntegrationTest {
@@ -72,7 +65,6 @@ abstract class AbstractControllerIntegrationTest {
         return objectMapper.readTree(body);
     }
 
-    /** Creates a regular user (as admin) and returns their own access token. */
     protected String createUserAndLogin(String adminToken, String name, String email) throws Exception {
         createUser(adminToken, name, email);
         return login(email, "secret123");

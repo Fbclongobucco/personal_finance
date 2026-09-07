@@ -6,7 +6,6 @@ import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
-import org.hibernate.annotations.BatchSize;
 
 import java.time.LocalDateTime;
 import java.util.Objects;
@@ -26,6 +25,9 @@ public class CategoryEntity {
     @Column(nullable = false)
     private Type type;
 
+    @Column(name = "user_id", nullable = false)
+    private UUID userId;
+
     @Column(nullable = false)
     private LocalDateTime createdAt;
 
@@ -39,10 +41,12 @@ public class CategoryEntity {
     protected CategoryEntity() {
     }
 
-    public CategoryEntity(UUID id, String name, Type type, LocalDateTime createdAt, LocalDateTime updatedAt) {
+    public CategoryEntity(UUID id, String name, Type type, UUID userId, LocalDateTime createdAt,
+                          LocalDateTime updatedAt) {
         this.id = id;
         this.name = name;
         this.type = type;
+        this.userId = userId;
         this.createdAt = createdAt;
         this.updatedAt = updatedAt;
     }
@@ -69,6 +73,14 @@ public class CategoryEntity {
 
     public void setType(Type type) {
         this.type = type;
+    }
+
+    public UUID getUserId() {
+        return userId;
+    }
+
+    public void setUserId(UUID userId) {
+        this.userId = userId;
     }
 
     public LocalDateTime getCreatedAt() {

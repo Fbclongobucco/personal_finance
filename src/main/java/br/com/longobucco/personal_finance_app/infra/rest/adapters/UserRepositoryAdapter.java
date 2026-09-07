@@ -3,8 +3,11 @@ package br.com.longobucco.personal_finance_app.infra.rest.adapters;
 import br.com.longobucco.personal_finance_app.core.domain.User;
 import br.com.longobucco.personal_finance_app.core.repository.UserRepository;
 import br.com.longobucco.personal_finance_app.infra.rest.entities.UserEntity;
+import br.com.longobucco.personal_finance_app.infra.rest.jpa_repository.CategoryJpaRepository;
+import br.com.longobucco.personal_finance_app.infra.rest.jpa_repository.TransactionJpaRepository;
 import br.com.longobucco.personal_finance_app.infra.rest.jpa_repository.UserJpaRepository;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Optional;
 import java.util.UUID;
@@ -13,9 +16,15 @@ import java.util.UUID;
 public class UserRepositoryAdapter implements UserRepository {
 
     private final UserJpaRepository userJpaRepository;
+    private final TransactionJpaRepository transactionJpaRepository;
+    private final CategoryJpaRepository categoryJpaRepository;
 
-    public UserRepositoryAdapter(UserJpaRepository userJpaRepository) {
+    public UserRepositoryAdapter(UserJpaRepository userJpaRepository,
+                                 TransactionJpaRepository transactionJpaRepository,
+                                 CategoryJpaRepository categoryJpaRepository) {
         this.userJpaRepository = userJpaRepository;
+        this.transactionJpaRepository = transactionJpaRepository;
+        this.categoryJpaRepository = categoryJpaRepository;
     }
 
     @Override
@@ -30,7 +39,10 @@ public class UserRepositoryAdapter implements UserRepository {
     }
 
     @Override
+    @Transactional
     public void delete(User user) {
+        transactionJpaRepository.deleteByUserId(user.getId());
+        categoryJpaRepository.deleteByUserId(user.getId());
         userJpaRepository.deleteById(user.getId());
     }
 

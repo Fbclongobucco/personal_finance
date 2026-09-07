@@ -13,9 +13,9 @@ public class Transaction {
     private final String description;
     private final Category category;
     private final BigDecimal amount;
-    private final User user;
+    private final UUID userId;
     private final LocalDateTime createdAt;
-    private final LocalDateTime updatedAt;
+    private LocalDateTime updatedAt;
     private final PaymentMethod paymentMethod;
     private boolean paid;
     public enum PaymentMethod {
@@ -23,18 +23,18 @@ public class Transaction {
     }
 
     private Transaction(UUID id, String description, Category category, BigDecimal amount,
-                        User user, LocalDateTime createdAt, LocalDateTime updatedAt, PaymentMethod paymentMethod,
+                        UUID userId, LocalDateTime createdAt, LocalDateTime updatedAt, PaymentMethod paymentMethod,
                         boolean paid){
-        validate(description, category, amount, user, paymentMethod);
+        validate(description, category, amount, userId, paymentMethod);
         this.id = id;
         this.description = description;
         this.category = category;
         this.amount = amount;
-        this.user = user;
+        this.userId = userId;
         this.createdAt = createdAt;
         this.updatedAt = updatedAt;
         this.paymentMethod = paymentMethod;
-        // Settlement only applies to expenses; an income is always considered settled.
+
         this.paid = category.getType() == Category.Type.EXPENSE ? paid : true;
     }
 
@@ -54,8 +54,8 @@ public class Transaction {
         return amount;
     }
 
-    public User getUser() {
-        return user;
+    public UUID getUserId() {
+        return userId;
     }
 
     public LocalDateTime getCreatedAt() {
@@ -74,54 +74,48 @@ public class Transaction {
         return paid;
     }
 
-    /**
-     * Marks an expense as settled ("dar baixa"). Only meaningful for EXPENSE transactions — an
-     * income is already always considered settled.
-     */
     public void settle() {
         if (category.getType() != Category.Type.EXPENSE) {
             throw InvalidTransactionException.notExpense();
         }
+        if (paid) {
+            return;
+        }
         this.paid = true;
+        this.updatedAt = LocalDateTime.now();
     }
 
     public static Transaction create(String description, Category category, BigDecimal amount,
-                                     User user, PaymentMethod paymentMethod){
-        return create(description, category, amount, user, paymentMethod, defaultPaid(category));
+                                     UUID userId, PaymentMethod paymentMethod){
+        return create(description, category, amount, userId, paymentMethod, defaultPaid(category));
     }
 
     public static Transaction create(String description, Category category, BigDecimal amount,
-                                     User user, PaymentMethod paymentMethod, boolean paid){
+                                     UUID userId, PaymentMethod paymentMethod, boolean paid){
         UUID id = UUID.randomUUID();
         LocalDateTime createdAt = LocalDateTime.now();
-        Transaction transaction = new Transaction(id, description, category, amount, user, createdAt, createdAt,
-                paymentMethod, paid);
-        user.addTransaction(transaction);
-        return transaction;
+        return new Transaction(id, description, category, amount, userId, createdAt, createdAt, paymentMethod, paid);
     }
 
     public static Transaction recover(UUID id, String description, Category category, BigDecimal amount,
-                                      User user, LocalDateTime createdAt, LocalDateTime updatedAt, PaymentMethod paymentMethod){
-        return recover(id, description, category, amount, user, createdAt, updatedAt, paymentMethod,
+                                      UUID userId, LocalDateTime createdAt, LocalDateTime updatedAt,
+                                      PaymentMethod paymentMethod){
+        return recover(id, description, category, amount, userId, createdAt, updatedAt, paymentMethod,
                 defaultPaid(category));
     }
 
     public static Transaction recover(UUID id, String description, Category category, BigDecimal amount,
-                                      User user, LocalDateTime createdAt, LocalDateTime updatedAt,
+                                      UUID userId, LocalDateTime createdAt, LocalDateTime updatedAt,
                                       PaymentMethod paymentMethod, boolean paid){
-        Transaction transaction = new Transaction(id, description, category, amount, user, createdAt, updatedAt,
-                paymentMethod, paid);
-        // The user's persisted balance already reflects this transaction — don't re-apply it.
-        user.attachTransaction(transaction);
-        return transaction;
+        return new Transaction(id, description, category, amount, userId, createdAt, updatedAt, paymentMethod, paid);
     }
 
-    /** New expenses start pending (unpaid) by default; incomes are always settled. */
     private static boolean defaultPaid(Category category) {
         return category == null || category.getType() != Category.Type.EXPENSE;
     }
 
-    private static void validate(String description, Category category, BigDecimal amount, User user, PaymentMethod paymentMethod) {
+    private static void validate(String description, Category category, BigDecimal amount, UUID userId,
+                                 PaymentMethod paymentMethod) {
         if (description == null || description.isBlank()) {
             throw InvalidTransactionException.blankDescription();
         }
@@ -131,11 +125,15 @@ public class Transaction {
         if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) {
             throw InvalidTransactionException.nonPositiveAmount(amount);
         }
-        if (user == null) {
-            throw InvalidTransactionException.nullUser();
+        if (userId == null) {
+            throw InvalidTransactionException.nullUserId();
         }
         if (paymentMethod == null) {
             throw InvalidTransactionException.nullPaymentMethod();
+        }
+
+        if (!category.isOwnedBy(userId)) {
+            throw InvalidTransactionException.categoryNotOwnedByUser(category.getId(), userId);
         }
     }
 

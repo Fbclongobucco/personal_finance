@@ -1,6 +1,7 @@
 package br.com.longobucco.personal_finance_app.core.exception;
 
 import java.math.BigDecimal;
+import java.util.UUID;
 
 public class InvalidTransactionException extends DomainException {
 
@@ -20,8 +21,13 @@ public class InvalidTransactionException extends DomainException {
         return new InvalidTransactionException("Transaction amount must be greater than zero: " + amount);
     }
 
-    public static InvalidTransactionException nullUser() {
+    public static InvalidTransactionException nullUserId() {
         return new InvalidTransactionException("Transaction user must not be null");
+    }
+
+    public static InvalidTransactionException categoryNotOwnedByUser(UUID categoryId, UUID userId) {
+        return new InvalidTransactionException(
+                "Category '%s' does not belong to user '%s'".formatted(categoryId, userId));
     }
 
     public static InvalidTransactionException nullPaymentMethod() {

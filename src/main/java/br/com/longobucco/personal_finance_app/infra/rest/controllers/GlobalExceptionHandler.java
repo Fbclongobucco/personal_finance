@@ -1,5 +1,6 @@
 package br.com.longobucco.personal_finance_app.infra.rest.controllers;
 
+import br.com.longobucco.personal_finance_app.application.exception.CategoryAlreadyExistsException;
 import br.com.longobucco.personal_finance_app.application.exception.CategoryNotFoundException;
 import br.com.longobucco.personal_finance_app.application.exception.ForbiddenException;
 import br.com.longobucco.personal_finance_app.application.exception.InvalidCredentialsException;
@@ -13,11 +14,6 @@ import org.springframework.http.ProblemDetail;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
-/**
- * Maps application/domain exceptions (which are plain RuntimeExceptions with no framework
- * dependency) to the HTTP status codes documented on the controllers' @ApiResponses. Without this,
- * they all fall through to Spring Boot's default handling as 500 Internal Server Error.
- */
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
@@ -26,8 +22,8 @@ public class GlobalExceptionHandler {
         return ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, ex.getMessage());
     }
 
-    @ExceptionHandler(UserAlreadyExistsException.class)
-    public ProblemDetail handleAlreadyExists(UserAlreadyExistsException ex) {
+    @ExceptionHandler({UserAlreadyExistsException.class, CategoryAlreadyExistsException.class})
+    public ProblemDetail handleAlreadyExists(RuntimeException ex) {
         return ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, ex.getMessage());
     }
 

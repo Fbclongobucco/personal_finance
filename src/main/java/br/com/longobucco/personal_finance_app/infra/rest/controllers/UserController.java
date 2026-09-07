@@ -3,10 +3,11 @@ package br.com.longobucco.personal_finance_app.infra.rest.controllers;
 import br.com.longobucco.personal_finance_app.application.dto.transaction.TransactionResponseDto;
 import br.com.longobucco.personal_finance_app.application.dto.user.UserRequestDto;
 import br.com.longobucco.personal_finance_app.application.dto.user.UserResponseDto;
+import br.com.longobucco.personal_finance_app.application.dto.category.CategoryResponseDto;
+import br.com.longobucco.personal_finance_app.application.usecase.CategoryUseCase;
 import br.com.longobucco.personal_finance_app.application.usecase.UserUseCase;
 import br.com.longobucco.personal_finance_app.core.domain.Category;
 import br.com.longobucco.personal_finance_app.core.domain.User;
-import br.com.longobucco.personal_finance_app.infra.rest.security.AccessGuard;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -36,9 +37,11 @@ import java.util.UUID;
 public class UserController {
 
     private final UserUseCase userUseCase;
+    private final CategoryUseCase categoryUseCase;
 
-    public UserController(UserUseCase userUseCase) {
+    public UserController(UserUseCase userUseCase, CategoryUseCase categoryUseCase) {
         this.userUseCase = userUseCase;
+        this.categoryUseCase = categoryUseCase;
     }
 
     @Operation(summary = "Create a user", description = "Requires the ADMIN role — there is no public self-registration.")
@@ -62,8 +65,7 @@ public class UserController {
     })
     @GetMapping("/{id}")
     public ResponseEntity<UserResponseDto> getById(@PathVariable UUID id, @AuthenticationPrincipal User currentUser) {
-        AccessGuard.requireOwnerOrAdmin(currentUser, id);
-        return ResponseEntity.ok(userUseCase.getUserById(id));
+        return ResponseEntity.ok(userUseCase.getUserById(id, currentUser));
     }
 
     @Operation(summary = "Get a user by email", description = "Callers may only fetch their own user, unless they are an ADMIN.")
@@ -74,21 +76,20 @@ public class UserController {
     })
     @GetMapping(params = "email")
     public ResponseEntity<UserResponseDto> getByEmail(@RequestParam String email, @AuthenticationPrincipal User currentUser) {
-        UserResponseDto user = userUseCase.getUserByEmail(email);
-        AccessGuard.requireOwnerOrAdmin(currentUser, user.id());
-        return ResponseEntity.ok(user);
+        return ResponseEntity.ok(userUseCase.getUserByEmail(email, currentUser));
     }
 
-    @Operation(summary = "Delete a user by id", description = "Callers may only delete their own user, unless they are an ADMIN.")
+    @Operation(summary = "Delete a user by id",
+            description = "Deletes the user together with everything they own — their transactions and their "
+                    + "categories. Callers may only delete their own user, unless they are an ADMIN.")
     @ApiResponses({
-            @ApiResponse(responseCode = "204", description = "User deleted"),
+            @ApiResponse(responseCode = "204", description = "User and all their transactions and categories deleted"),
             @ApiResponse(responseCode = "403", description = "Caller is not the owner and not an ADMIN"),
             @ApiResponse(responseCode = "404", description = "User not found")
     })
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> delete(@PathVariable UUID id, @AuthenticationPrincipal User currentUser) {
-        AccessGuard.requireOwnerOrAdmin(currentUser, id);
-        userUseCase.deleteUser(id);
+        userUseCase.deleteUser(id, currentUser);
         return ResponseEntity.noContent().build();
     }
 
@@ -98,6 +99,7 @@ public class UserController {
                     + "transactions, unless they are an ADMIN.")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Transactions found"),
+            @ApiResponse(responseCode = "400", description = "Period start is after end"),
             @ApiResponse(responseCode = "403", description = "Caller is not the owner and not an ADMIN"),
             @ApiResponse(responseCode = "404", description = "User not found")
     })
@@ -111,13 +113,30 @@ public class UserController {
             @RequestParam(required = false) LocalDateTime end,
             @Parameter(description = "Optional category type filter, only applied when start/end are set")
             @RequestParam(required = false) Category.Type type) {
-        AccessGuard.requireOwnerOrAdmin(currentUser, id);
         if (start == null || end == null) {
-            return ResponseEntity.ok(userUseCase.getUserTransactions(id));
+            return ResponseEntity.ok(userUseCase.getUserTransactions(id, currentUser));
         }
         if (type != null) {
-            return ResponseEntity.ok(userUseCase.getUserTransactionsByTypeBetween(id, type, start, end));
+            return ResponseEntity.ok(userUseCase.getUserTransactionsByTypeBetween(id, type, start, end, currentUser));
         }
-        return ResponseEntity.ok(userUseCase.getUserTransactionsBetween(id, start, end));
+        return ResponseEntity.ok(userUseCase.getUserTransactionsBetween(id, start, end, currentUser));
+    }
+
+    @Operation(summary = "List a user's categories",
+            description = "The categories this user owns, optionally narrowed by type and by a case-insensitive "
+                    + "fragment of the name. Callers may only list their own, unless they are an ADMIN.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Categories listed"),
+            @ApiResponse(responseCode = "403", description = "Caller is not the owner and not an ADMIN")
+    })
+    @GetMapping("/{id}/categories")
+    public ResponseEntity<List<CategoryResponseDto>> categories(
+            @PathVariable UUID id,
+            @AuthenticationPrincipal User currentUser,
+            @Parameter(description = "Optional category type filter")
+            @RequestParam(required = false) Category.Type type,
+            @Parameter(description = "Optional case-insensitive fragment of the category name")
+            @RequestParam(required = false) String name) {
+        return ResponseEntity.ok(categoryUseCase.searchCategories(List.of(id), type, name, currentUser));
     }
 }

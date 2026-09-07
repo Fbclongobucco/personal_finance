@@ -13,4 +13,8 @@ public class InvalidCategoryException extends DomainException {
     public static InvalidCategoryException nullType() {
         return new InvalidCategoryException("Category type must not be null");
     }
+
+    public static InvalidCategoryException nullOwnerId() {
+        return new InvalidCategoryException("Category owner must not be null");
+    }
 }

@@ -5,7 +5,6 @@ import br.com.longobucco.personal_finance_app.application.dto.transaction.Transa
 import br.com.longobucco.personal_finance_app.application.usecase.TransactionUseCase;
 import br.com.longobucco.personal_finance_app.core.domain.Category;
 import br.com.longobucco.personal_finance_app.core.domain.User;
-import br.com.longobucco.personal_finance_app.infra.rest.security.AccessGuard;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -29,7 +28,8 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 
-@Tag(name = "Transactions", description = "Income and expense transactions")
+@Tag(name = "Transactions", description = "Income and expense transactions, each classified with one of the "
+        + "user's own categories. A transaction the caller may not see is reported as 404, not 403.")
 @RestController
 @RequestMapping("/api/transactions")
 public class TransactionController {
@@ -41,33 +41,30 @@ public class TransactionController {
     }
 
     @Operation(summary = "Create a transaction",
-            description = "Registers the transaction and applies it to the user's balance. Only the transaction's "
-                    + "own user may create it — not even an ADMIN can create a transaction on someone else's behalf.")
+            description = "Registers the transaction and applies it to the user's balance. The category must be "
+                    + "one of the user's own. Only the transaction's own user may create it — not even an ADMIN "
+                    + "can create a transaction on someone else's behalf.")
     @ApiResponses({
             @ApiResponse(responseCode = "201", description = "Transaction created"),
             @ApiResponse(responseCode = "400", description = "Validation error"),
             @ApiResponse(responseCode = "403", description = "Caller is not the transaction's own user"),
-            @ApiResponse(responseCode = "404", description = "User or category not found")
+            @ApiResponse(responseCode = "404", description = "User not found, or category not found among the user's own")
     })
     @PostMapping
     public ResponseEntity<TransactionResponseDto> create(@Valid @RequestBody TransactionRequestDto request,
                                                           @AuthenticationPrincipal User currentUser) {
-        AccessGuard.requireOwner(currentUser, request.userId());
-        TransactionResponseDto created = transactionUseCase.createTransaction(request);
+        TransactionResponseDto created = transactionUseCase.createTransaction(request, currentUser);
         return ResponseEntity.status(HttpStatus.CREATED).body(created);
     }
 
     @Operation(summary = "Get a transaction by id", description = "Callers may only fetch their own transactions, unless they are an ADMIN.")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Transaction found"),
-            @ApiResponse(responseCode = "403", description = "Caller is not the owner and not an ADMIN"),
-            @ApiResponse(responseCode = "404", description = "Transaction not found")
+            @ApiResponse(responseCode = "404", description = "Transaction not found, or not visible to the caller")
     })
     @GetMapping("/{id}")
     public ResponseEntity<TransactionResponseDto> getById(@PathVariable UUID id, @AuthenticationPrincipal User currentUser) {
-        TransactionResponseDto transaction = transactionUseCase.getTransactionById(id);
-        AccessGuard.requireOwnerOrAdmin(currentUser, transaction.userId());
-        return ResponseEntity.ok(transaction);
+        return ResponseEntity.ok(transactionUseCase.getTransactionById(id, currentUser));
     }
 
     @Operation(summary = "List a user's transactions",
@@ -76,6 +73,7 @@ public class TransactionController {
                     + "transactions, unless they are an ADMIN.")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Transactions found"),
+            @ApiResponse(responseCode = "400", description = "Period start is after end"),
             @ApiResponse(responseCode = "403", description = "Caller is not the owner and not an ADMIN"),
             @ApiResponse(responseCode = "404", description = "User not found")
     })
@@ -90,14 +88,14 @@ public class TransactionController {
             @RequestParam(required = false) LocalDateTime end,
             @Parameter(description = "Optional category type filter, only applied when start/end are set")
             @RequestParam(required = false) Category.Type type) {
-        AccessGuard.requireOwnerOrAdmin(currentUser, userId);
         if (start == null || end == null) {
-            return ResponseEntity.ok(transactionUseCase.listTransactionsByUser(userId));
+            return ResponseEntity.ok(transactionUseCase.listTransactionsByUser(userId, currentUser));
         }
         if (type != null) {
-            return ResponseEntity.ok(transactionUseCase.listTransactionsByUserAndTypeBetween(userId, type, start, end));
+            return ResponseEntity.ok(transactionUseCase.listTransactionsByUserAndTypeBetween(userId, type, start, end,
+                    currentUser));
         }
-        return ResponseEntity.ok(transactionUseCase.listTransactionsByUserBetween(userId, start, end));
+        return ResponseEntity.ok(transactionUseCase.listTransactionsByUserBetween(userId, start, end, currentUser));
     }
 
     @Operation(summary = "Delete a transaction by id",
@@ -106,29 +104,26 @@ public class TransactionController {
     @ApiResponses({
             @ApiResponse(responseCode = "204", description = "Transaction deleted"),
             @ApiResponse(responseCode = "403", description = "Caller is not the transaction's own user"),
-            @ApiResponse(responseCode = "404", description = "Transaction not found")
+            @ApiResponse(responseCode = "404", description = "Transaction not found, or not visible to the caller")
     })
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> delete(@PathVariable UUID id, @AuthenticationPrincipal User currentUser) {
-        TransactionResponseDto transaction = transactionUseCase.getTransactionById(id);
-        AccessGuard.requireOwner(currentUser, transaction.userId());
-        transactionUseCase.deleteTransaction(id);
+        transactionUseCase.deleteTransaction(id, currentUser);
         return ResponseEntity.noContent().build();
     }
 
     @Operation(summary = "Settle an expense transaction (\"dar baixa\")",
-            description = "Marks an EXPENSE transaction as paid. Only the transaction's own user may settle it — "
+            description = "Marks an EXPENSE transaction as paid, moving its amount from the user's projected "
+                    + "balance into their settled balance. Only the transaction's own user may settle it — "
                     + "not even an ADMIN can settle someone else's expense.")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Transaction settled"),
             @ApiResponse(responseCode = "400", description = "Transaction is not an EXPENSE"),
             @ApiResponse(responseCode = "403", description = "Caller is not the transaction's own user"),
-            @ApiResponse(responseCode = "404", description = "Transaction not found")
+            @ApiResponse(responseCode = "404", description = "Transaction not found, or not visible to the caller")
     })
     @PatchMapping("/{id}/settle")
     public ResponseEntity<TransactionResponseDto> settle(@PathVariable UUID id, @AuthenticationPrincipal User currentUser) {
-        TransactionResponseDto transaction = transactionUseCase.getTransactionById(id);
-        AccessGuard.requireOwner(currentUser, transaction.userId());
-        return ResponseEntity.ok(transactionUseCase.settleTransaction(id));
+        return ResponseEntity.ok(transactionUseCase.settleTransaction(id, currentUser));
     }
 }

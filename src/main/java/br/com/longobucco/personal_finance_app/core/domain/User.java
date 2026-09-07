@@ -1,13 +1,9 @@
 package br.com.longobucco.personal_finance_app.core.domain;
 
-import br.com.longobucco.personal_finance_app.core.exception.InvalidPeriodException;
 import br.com.longobucco.personal_finance_app.core.exception.InvalidUserException;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.regex.Pattern;
@@ -23,7 +19,6 @@ public class User {
     private final String password;
     private final Role role;
     private BigDecimal balance;
-    private final List<Transaction> transactions = new ArrayList<>();
     private final LocalDate createdAt;
     private final LocalDate updatedAt;
     public enum Role {
@@ -68,33 +63,19 @@ public class User {
         return role;
     }
 
+    public boolean isAdmin() {
+        return role == Role.ADMIN;
+    }
+
     public BigDecimal getBalance() {
         return balance;
     }
 
-    public List<Transaction> getTransactions() {
-        return List.copyOf(transactions);
-    }
-
-    public List<Transaction> getTransactionsBetween(LocalDateTime start, LocalDateTime end) {
-        validatePeriod(start, end);
-        return transactions.stream()
-                .filter(transaction -> !transaction.getCreatedAt().isBefore(start) && !transaction.getCreatedAt().isAfter(end))
-                .toList();
-    }
-
-    public List<Transaction> getTransactionsByTypeBetween(Category.Type type, LocalDateTime start, LocalDateTime end) {
-        return getTransactionsBetween(start, end).stream()
-                .filter(transaction -> transaction.getCategory().getType() == type)
-                .toList();
-    }
-
-    public List<Transaction> getExpensesBetween(LocalDateTime start, LocalDateTime end) {
-        return getTransactionsByTypeBetween(Category.Type.EXPENSE, start, end);
-    }
-
-    public List<Transaction> getIncomesBetween(LocalDateTime start, LocalDateTime end) {
-        return getTransactionsByTypeBetween(Category.Type.INCOME, start, end);
+    public BigDecimal settledBalance(BigDecimal pendingExpenseTotal) {
+        if (pendingExpenseTotal == null || pendingExpenseTotal.compareTo(BigDecimal.ZERO) < 0) {
+            throw InvalidUserException.invalidPendingExpenseTotal(pendingExpenseTotal);
+        }
+        return balance.add(pendingExpenseTotal);
     }
 
     public LocalDate getCreatedAt() {
@@ -105,23 +86,13 @@ public class User {
         return updatedAt;
     }
 
-    /** Applies a newly created transaction's effect on the balance. */
-    public void addTransaction(Transaction transaction) {
-        attachTransaction(transaction);
+    public void applyTransaction(Transaction transaction) {
+        requireOwnTransaction(transaction);
         this.balance = transaction.getCategory().getType().apply(balance, transaction.getAmount());
     }
 
-    /**
-     * Re-attaches a transaction already reflected in the persisted balance (e.g. when reconstructing
-     * from storage) without re-applying its effect a second time.
-     */
-    public void attachTransaction(Transaction transaction) {
-        this.transactions.add(transaction);
-    }
-
-    /** Reverses a transaction's effect on the balance, e.g. when it is being deleted. */
-    public void removeTransaction(Transaction transaction) {
-        this.transactions.remove(transaction);
+    public void reverseTransaction(Transaction transaction) {
+        requireOwnTransaction(transaction);
         this.balance = transaction.getCategory().getType().reverse(balance, transaction.getAmount());
     }
 
@@ -131,7 +102,6 @@ public class User {
         LocalDate createdAt = LocalDate.now();
         return new User(id, name, email, phone, password, role, initialBalance, createdAt, createdAt);
     }
-
 
     public static User createAdmin(String name, String email, String phone, String password, BigDecimal initialBalance,
                                    LocalDate createdAt, LocalDate updatedAt){
@@ -143,6 +113,12 @@ public class User {
     public static User recover(UUID id, String name, String email, String phone, String password, Role role, BigDecimal initialBalance,
                                LocalDate createdAt, LocalDate updatedAt){
         return new User(id, name, email, phone, password, role, initialBalance, createdAt, updatedAt);
+    }
+
+    private void requireOwnTransaction(Transaction transaction) {
+        if (transaction == null || !id.equals(transaction.getUserId())) {
+            throw InvalidUserException.foreignTransaction();
+        }
     }
 
     private static void validate(String name, String email, String phone, String password, BigDecimal initialBalance) {
@@ -166,15 +142,6 @@ public class User {
     private static boolean isValidPhone(String phone) {
         String digits = phone.replaceAll("\\D", "");
         return digits.length() == 10 || digits.length() == 11;
-    }
-
-    private static void validatePeriod(LocalDateTime start, LocalDateTime end) {
-        if (start == null || end == null) {
-            throw InvalidPeriodException.nullBounds();
-        }
-        if (start.isAfter(end)) {
-            throw InvalidPeriodException.startAfterEnd(start, end);
-        }
     }
 
     @Override

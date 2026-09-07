@@ -1,5 +1,6 @@
 package br.com.longobucco.personal_finance_app.infra.rest.controllers;
 
+import br.com.longobucco.personal_finance_app.core.domain.Category;
 import tools.jackson.databind.JsonNode;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
@@ -28,6 +29,8 @@ class UserControllerIntegrationTest extends AbstractControllerIntegrationTest {
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.email").value(email))
                 .andExpect(jsonPath("$.role").value("USER"))
+                .andExpect(jsonPath("$.balance").value(100.00))
+                .andExpect(jsonPath("$.settledBalance").value(100.00))
                 .andExpect(jsonPath("$.password").doesNotExist());
     }
 
@@ -139,6 +142,30 @@ class UserControllerIntegrationTest extends AbstractControllerIntegrationTest {
     }
 
     @Test
+    void deleteUserAlsoRemovesTheirTransactionsAndCategories() throws Exception {
+        String adminToken = adminAccessToken();
+        JsonNode user = createUser(adminToken, "Cascade", "cascade-%s@example.com".formatted(uniqueSuffix()));
+        String userToken = login(user.get("email").asText(), "secret123");
+        UUID userId = UUID.fromString(user.get("id").asText());
+        UUID categoryId = createCategory(userToken, "Rent-%s".formatted(uniqueSuffix()), "EXPENSE");
+        JsonNode transaction = createTransaction(userToken, categoryId, "Rent", "30.00", userId, "CASH");
+
+        mockMvc.perform(delete("/api/users/" + userId)
+                        .header("Authorization", "Bearer " + adminToken))
+                .andExpect(status().isNoContent());
+
+        mockMvc.perform(get("/api/users/" + userId)
+                        .header("Authorization", "Bearer " + adminToken))
+                .andExpect(status().isNotFound());
+        mockMvc.perform(get("/api/transactions/" + transaction.get("id").asText())
+                        .header("Authorization", "Bearer " + adminToken))
+                .andExpect(status().isNotFound());
+        mockMvc.perform(get("/api/categories/" + categoryId)
+                        .header("Authorization", "Bearer " + adminToken))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
     void deleteUserWithoutTokenIsForbidden() throws Exception {
         mockMvc.perform(delete("/api/users/00000000-0000-0000-0000-000000000000"))
                 .andExpect(status().isForbidden());
@@ -211,10 +238,10 @@ class UserControllerIntegrationTest extends AbstractControllerIntegrationTest {
     @Test
     void balanceReflectsIncomeTransactionAfterPersisting() throws Exception {
         String adminToken = adminAccessToken();
-        UUID categoryId = createCategory(adminToken, "Salary-%s".formatted(uniqueSuffix()), "INCOME");
         JsonNode user = createUser(adminToken, "Earner", "earner-%s@example.com".formatted(uniqueSuffix()));
         String userToken = login(user.get("email").asText(), "secret123");
         UUID userId = UUID.fromString(user.get("id").asText());
+        UUID categoryId = createCategory(userToken, "Salary-%s".formatted(uniqueSuffix()), "INCOME");
 
         createTransaction(userToken, categoryId, "Salary", "50.00", userId, "PIX");
 
@@ -227,26 +254,28 @@ class UserControllerIntegrationTest extends AbstractControllerIntegrationTest {
     @Test
     void balanceReflectsExpenseTransactionAfterPersisting() throws Exception {
         String adminToken = adminAccessToken();
-        UUID categoryId = createCategory(adminToken, "Rent-%s".formatted(uniqueSuffix()), "EXPENSE");
         JsonNode user = createUser(adminToken, "Payer3", "payer3-%s@example.com".formatted(uniqueSuffix()));
         String userToken = login(user.get("email").asText(), "secret123");
         UUID userId = UUID.fromString(user.get("id").asText());
+        UUID categoryId = createCategory(userToken, "Rent-%s".formatted(uniqueSuffix()), "EXPENSE");
 
         createTransaction(userToken, categoryId, "Rent", "30.00", userId, "CASH");
 
         mockMvc.perform(get("/api/users/" + userId)
                         .header("Authorization", "Bearer " + userToken))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.balance").value(70.00));
+                .andExpect(jsonPath("$.balance").value(70.00))
+
+                .andExpect(jsonPath("$.settledBalance").value(100.00));
     }
 
     @Test
     void balanceIsReversedAndTransactionsSurviveAfterDeletingOneOfSeveral() throws Exception {
         String adminToken = adminAccessToken();
-        UUID categoryId = createCategory(adminToken, "Salary-%s".formatted(uniqueSuffix()), "INCOME");
         JsonNode user = createUser(adminToken, "MultiTx", "multitx-%s@example.com".formatted(uniqueSuffix()));
         String userToken = login(user.get("email").asText(), "secret123");
         UUID userId = UUID.fromString(user.get("id").asText());
+        UUID categoryId = createCategory(userToken, "Salary-%s".formatted(uniqueSuffix()), "INCOME");
 
         createTransaction(userToken, categoryId, "Salary 1", "50.00", userId, "PIX");
         JsonNode second = createTransaction(userToken, categoryId, "Salary 2", "20.00", userId, "PIX");
@@ -269,5 +298,62 @@ class UserControllerIntegrationTest extends AbstractControllerIntegrationTest {
                         .header("Authorization", "Bearer " + userToken))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.length()").value(1));
+    }
+
+    @Test
+    void nestedCategoriesRouteReturnsTheUsersOwnCategories() throws Exception {
+        String adminToken = adminAccessToken();
+        JsonNode user = createUser(adminToken, "Nested", "nested-%s@example.com".formatted(uniqueSuffix()));
+        String userToken = login(user.get("email").asText(), "secret123");
+        String name = "Aninhada-%s".formatted(uniqueSuffix());
+        createCategory(userToken, name, "EXPENSE");
+
+        mockMvc.perform(get("/api/users/" + user.get("id").asText() + "/categories")
+                        .header("Authorization", "Bearer " + userToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.name=='" + name + "')]").exists())
+                .andExpect(jsonPath("$[?(@.userId!='" + user.get("id").asText() + "')]").doesNotExist());
+    }
+
+    @Test
+    void nestedCategoriesRouteHonoursTypeAndNameFilters() throws Exception {
+        String adminToken = adminAccessToken();
+        JsonNode user = createUser(adminToken, "Nested2", "nested2-%s@example.com".formatted(uniqueSuffix()));
+        String userToken = login(user.get("email").asText(), "secret123");
+        String suffix = uniqueSuffix();
+        createCategory(userToken, "Extra-%s".formatted(suffix), "INCOME");
+
+        mockMvc.perform(get("/api/users/" + user.get("id").asText() + "/categories")
+                        .param("type", "INCOME")
+                        .param("name", "extra-" + suffix)
+                        .header("Authorization", "Bearer " + userToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].type").value("INCOME"));
+    }
+
+    @Test
+    void nestedCategoriesRouteIsAllowedForAdmin() throws Exception {
+        String adminToken = adminAccessToken();
+        JsonNode user = createUser(adminToken, "Nested3", "nested3-%s@example.com".formatted(uniqueSuffix()));
+        String userId = user.get("id").asText();
+
+        mockMvc.perform(get("/api/users/" + userId + "/categories")
+                        .header("Authorization", "Bearer " + adminToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(Category.defaultsFor(UUID.fromString(userId)).size()))
+                .andExpect(jsonPath("$[?(@.userId!='" + userId + "')]").doesNotExist());
+    }
+
+    @Test
+    void nestedCategoriesRouteForAnotherUserIsForbidden() throws Exception {
+        String adminToken = adminAccessToken();
+        JsonNode owner = createUser(adminToken, "Nested4", "nested4-%s@example.com".formatted(uniqueSuffix()));
+        String intruderToken = createUserAndLogin(adminToken, "Nested5",
+                "nested5-%s@example.com".formatted(uniqueSuffix()));
+
+        mockMvc.perform(get("/api/users/" + owner.get("id").asText() + "/categories")
+                        .header("Authorization", "Bearer " + intruderToken))
+                .andExpect(status().isForbidden());
     }
 }

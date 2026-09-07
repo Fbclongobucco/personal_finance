@@ -1,5 +1,7 @@
 package br.com.longobucco.personal_finance_app.core.exception;
 
+import java.math.BigDecimal;
+
 public class InvalidUserException extends DomainException {
 
     private InvalidUserException(String message) {
@@ -24,5 +26,13 @@ public class InvalidUserException extends DomainException {
 
     public static InvalidUserException nullInitialBalance() {
         return new InvalidUserException("User initial balance must not be null");
+    }
+
+    public static InvalidUserException invalidPendingExpenseTotal(BigDecimal total) {
+        return new InvalidUserException("Pending expense total must not be null or negative: " + total);
+    }
+
+    public static InvalidUserException foreignTransaction() {
+        return new InvalidUserException("A transaction belonging to another user cannot affect this user's balance");
     }
 }

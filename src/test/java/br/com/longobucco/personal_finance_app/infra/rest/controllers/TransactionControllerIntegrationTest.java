@@ -18,9 +18,9 @@ class TransactionControllerIntegrationTest extends AbstractControllerIntegration
     @Test
     void createTransactionForSelfReturnsCreated() throws Exception {
         String adminToken = adminAccessToken();
-        UUID categoryId = createCategory(adminToken, "Salary-%s".formatted(uniqueSuffix()), "INCOME");
         JsonNode user = createUser(adminToken, "Payer", "payer-%s@example.com".formatted(uniqueSuffix()));
         String userToken = login(user.get("email").asText(), "secret123");
+        UUID categoryId = createCategory(userToken, "Salary-%s".formatted(uniqueSuffix()), "INCOME");
 
         mockMvc.perform(post("/api/transactions")
                         .header("Authorization", "Bearer " + userToken)
@@ -38,9 +38,9 @@ class TransactionControllerIntegrationTest extends AbstractControllerIntegration
     @Test
     void createExpenseTransactionStartsUnpaid() throws Exception {
         String adminToken = adminAccessToken();
-        UUID categoryId = createCategory(adminToken, "Rent-%s".formatted(uniqueSuffix()), "EXPENSE");
         JsonNode user = createUser(adminToken, "Payer5", "payer5-%s@example.com".formatted(uniqueSuffix()));
         String userToken = login(user.get("email").asText(), "secret123");
+        UUID categoryId = createCategory(userToken, "Rent-%s".formatted(uniqueSuffix()), "EXPENSE");
 
         mockMvc.perform(post("/api/transactions")
                         .header("Authorization", "Bearer " + userToken)
@@ -125,9 +125,9 @@ class TransactionControllerIntegrationTest extends AbstractControllerIntegration
     @Test
     void getByIdAsOwnerIsAllowed() throws Exception {
         String adminToken = adminAccessToken();
-        UUID categoryId = createCategory(adminToken, "Salary-%s".formatted(uniqueSuffix()), "INCOME");
         JsonNode user = createUser(adminToken, "Owner2", "owner2-%s@example.com".formatted(uniqueSuffix()));
         String userToken = login(user.get("email").asText(), "secret123");
+        UUID categoryId = createCategory(userToken, "Salary-%s".formatted(uniqueSuffix()), "INCOME");
         JsonNode transaction = createTransaction(userToken, categoryId, "Salary", "1500.00",
                 UUID.fromString(user.get("id").asText()), "PIX");
 
@@ -140,9 +140,9 @@ class TransactionControllerIntegrationTest extends AbstractControllerIntegration
     @Test
     void getByIdAsAdminIsAllowedViewOnly() throws Exception {
         String adminToken = adminAccessToken();
-        UUID categoryId = createCategory(adminToken, "Salary-%s".formatted(uniqueSuffix()), "INCOME");
         JsonNode user = createUser(adminToken, "Owner6", "owner6-%s@example.com".formatted(uniqueSuffix()));
         String userToken = login(user.get("email").asText(), "secret123");
+        UUID categoryId = createCategory(userToken, "Salary-%s".formatted(uniqueSuffix()), "INCOME");
         JsonNode transaction = createTransaction(userToken, categoryId, "Salary", "1500.00",
                 UUID.fromString(user.get("id").asText()), "PIX");
 
@@ -153,11 +153,11 @@ class TransactionControllerIntegrationTest extends AbstractControllerIntegration
     }
 
     @Test
-    void getByIdForAnotherRegularUsersTransactionIsForbidden() throws Exception {
+    void getByIdForAnotherRegularUsersTransactionIsNotFound() throws Exception {
         String adminToken = adminAccessToken();
-        UUID categoryId = createCategory(adminToken, "Salary-%s".formatted(uniqueSuffix()), "INCOME");
         JsonNode owner = createUser(adminToken, "Owner3", "owner3-%s@example.com".formatted(uniqueSuffix()));
         String ownerToken = login(owner.get("email").asText(), "secret123");
+        UUID categoryId = createCategory(ownerToken, "Salary-%s".formatted(uniqueSuffix()), "INCOME");
         JsonNode intruder = createUser(adminToken, "Intruder3", "intruder3-%s@example.com".formatted(uniqueSuffix()));
         String intruderToken = login(intruder.get("email").asText(), "secret123");
         JsonNode transaction = createTransaction(ownerToken, categoryId, "Salary", "1500.00",
@@ -165,16 +165,74 @@ class TransactionControllerIntegrationTest extends AbstractControllerIntegration
 
         mockMvc.perform(get("/api/transactions/" + transaction.get("id").asText())
                         .header("Authorization", "Bearer " + intruderToken))
-                .andExpect(status().isForbidden());
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void createTransactionWithAnotherUsersCategoryReturnsNotFound() throws Exception {
+        String adminToken = adminAccessToken();
+        JsonNode owner = createUser(adminToken, "Owner9", "owner9-%s@example.com".formatted(uniqueSuffix()));
+        String ownerToken = login(owner.get("email").asText(), "secret123");
+        UUID othersCategoryId = createCategory(ownerToken, "Private-%s".formatted(uniqueSuffix()), "INCOME");
+        JsonNode intruder = createUser(adminToken, "Intruder9", "intruder9-%s@example.com".formatted(uniqueSuffix()));
+        String intruderToken = login(intruder.get("email").asText(), "secret123");
+
+        mockMvc.perform(post("/api/transactions")
+                        .header("Authorization", "Bearer " + intruderToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"description":"Salary","categoryId":"%s","amount":100.00,"userId":"%s","paymentMethod":"PIX"}
+                                """.formatted(othersCategoryId, intruder.get("id").asText())))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void listByUserWithStartAfterEndReturnsBadRequest() throws Exception {
+        String adminToken = adminAccessToken();
+        JsonNode user = createUser(adminToken, "Ranger", "ranger-%s@example.com".formatted(uniqueSuffix()));
+        String userToken = login(user.get("email").asText(), "secret123");
+
+        mockMvc.perform(get("/api/transactions")
+                        .param("userId", user.get("id").asText())
+                        .param("start", "2026-02-01T00:00:00")
+                        .param("end", "2026-01-01T00:00:00")
+                        .header("Authorization", "Bearer " + userToken))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void settlingAnExpenseMovesItIntoTheSettledBalance() throws Exception {
+        String adminToken = adminAccessToken();
+        JsonNode user = createUser(adminToken, "Settler3", "settler3-%s@example.com".formatted(uniqueSuffix()));
+        String userToken = login(user.get("email").asText(), "secret123");
+        UUID userId = UUID.fromString(user.get("id").asText());
+        UUID categoryId = createCategory(userToken, "Rent-%s".formatted(uniqueSuffix()), "EXPENSE");
+        JsonNode transaction = createTransaction(userToken, categoryId, "Rent", "30.00", userId, "CASH");
+
+        mockMvc.perform(get("/api/users/" + userId)
+                        .header("Authorization", "Bearer " + userToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.balance").value(70.00))
+                .andExpect(jsonPath("$.settledBalance").value(100.00));
+
+        mockMvc.perform(patch("/api/transactions/" + transaction.get("id").asText() + "/settle")
+                        .header("Authorization", "Bearer " + userToken))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(get("/api/users/" + userId)
+                        .header("Authorization", "Bearer " + userToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.balance").value(70.00))
+                .andExpect(jsonPath("$.settledBalance").value(70.00));
     }
 
     @Test
     void listByUserReturnsCreatedTransaction() throws Exception {
         String adminToken = adminAccessToken();
-        UUID categoryId = createCategory(adminToken, "Salary-%s".formatted(uniqueSuffix()), "INCOME");
         JsonNode user = createUser(adminToken, "Lister", "lister-%s@example.com".formatted(uniqueSuffix()));
         String userToken = login(user.get("email").asText(), "secret123");
         String userId = user.get("id").asText();
+        UUID categoryId = createCategory(userToken, "Salary-%s".formatted(uniqueSuffix()), "INCOME");
         createTransaction(userToken, categoryId, "Salary", "1500.00", UUID.fromString(userId), "PIX");
 
         mockMvc.perform(get("/api/transactions").param("userId", userId)
@@ -187,10 +245,10 @@ class TransactionControllerIntegrationTest extends AbstractControllerIntegration
     @Test
     void listByUserAsAdminIsAllowedViewOnly() throws Exception {
         String adminToken = adminAccessToken();
-        UUID categoryId = createCategory(adminToken, "Salary-%s".formatted(uniqueSuffix()), "INCOME");
         JsonNode user = createUser(adminToken, "Lister2", "lister2-%s@example.com".formatted(uniqueSuffix()));
         String userToken = login(user.get("email").asText(), "secret123");
         String userId = user.get("id").asText();
+        UUID categoryId = createCategory(userToken, "Salary-%s".formatted(uniqueSuffix()), "INCOME");
         createTransaction(userToken, categoryId, "Salary", "1500.00", UUID.fromString(userId), "PIX");
 
         mockMvc.perform(get("/api/transactions").param("userId", userId)
@@ -220,9 +278,9 @@ class TransactionControllerIntegrationTest extends AbstractControllerIntegration
     @Test
     void deleteTransactionRemovesItAndSubsequentGetIsNotFound() throws Exception {
         String adminToken = adminAccessToken();
-        UUID categoryId = createCategory(adminToken, "Rent-%s".formatted(uniqueSuffix()), "EXPENSE");
         JsonNode user = createUser(adminToken, "Deletable", "deltx-%s@example.com".formatted(uniqueSuffix()));
         String userToken = login(user.get("email").asText(), "secret123");
+        UUID categoryId = createCategory(userToken, "Rent-%s".formatted(uniqueSuffix()), "EXPENSE");
         JsonNode transaction = createTransaction(userToken, categoryId, "Rent", "30.00",
                 UUID.fromString(user.get("id").asText()), "CASH");
         String transactionId = transaction.get("id").asText();
@@ -239,9 +297,9 @@ class TransactionControllerIntegrationTest extends AbstractControllerIntegration
     @Test
     void deleteAnotherUsersTransactionIsForbiddenEvenForAdmin() throws Exception {
         String adminToken = adminAccessToken();
-        UUID categoryId = createCategory(adminToken, "Rent-%s".formatted(uniqueSuffix()), "EXPENSE");
         JsonNode owner = createUser(adminToken, "Owner7", "owner7-%s@example.com".formatted(uniqueSuffix()));
         String ownerToken = login(owner.get("email").asText(), "secret123");
+        UUID categoryId = createCategory(ownerToken, "Rent-%s".formatted(uniqueSuffix()), "EXPENSE");
         JsonNode transaction = createTransaction(ownerToken, categoryId, "Rent", "30.00",
                 UUID.fromString(owner.get("id").asText()), "CASH");
 
@@ -253,9 +311,9 @@ class TransactionControllerIntegrationTest extends AbstractControllerIntegration
     @Test
     void settleExpenseMarksItAsPaid() throws Exception {
         String adminToken = adminAccessToken();
-        UUID categoryId = createCategory(adminToken, "Rent-%s".formatted(uniqueSuffix()), "EXPENSE");
         JsonNode user = createUser(adminToken, "Settler", "settler-%s@example.com".formatted(uniqueSuffix()));
         String userToken = login(user.get("email").asText(), "secret123");
+        UUID categoryId = createCategory(userToken, "Rent-%s".formatted(uniqueSuffix()), "EXPENSE");
         JsonNode transaction = createTransaction(userToken, categoryId, "Rent", "30.00",
                 UUID.fromString(user.get("id").asText()), "CASH");
 
@@ -268,9 +326,9 @@ class TransactionControllerIntegrationTest extends AbstractControllerIntegration
     @Test
     void settleExpenseAsAnotherUserIsForbiddenEvenForAdmin() throws Exception {
         String adminToken = adminAccessToken();
-        UUID categoryId = createCategory(adminToken, "Rent-%s".formatted(uniqueSuffix()), "EXPENSE");
         JsonNode owner = createUser(adminToken, "Owner8", "owner8-%s@example.com".formatted(uniqueSuffix()));
         String ownerToken = login(owner.get("email").asText(), "secret123");
+        UUID categoryId = createCategory(ownerToken, "Rent-%s".formatted(uniqueSuffix()), "EXPENSE");
         JsonNode transaction = createTransaction(ownerToken, categoryId, "Rent", "30.00",
                 UUID.fromString(owner.get("id").asText()), "CASH");
 
@@ -282,9 +340,9 @@ class TransactionControllerIntegrationTest extends AbstractControllerIntegration
     @Test
     void settleIncomeTransactionReturnsBadRequest() throws Exception {
         String adminToken = adminAccessToken();
-        UUID categoryId = createCategory(adminToken, "Salary-%s".formatted(uniqueSuffix()), "INCOME");
         JsonNode user = createUser(adminToken, "Settler2", "settler2-%s@example.com".formatted(uniqueSuffix()));
         String userToken = login(user.get("email").asText(), "secret123");
+        UUID categoryId = createCategory(userToken, "Salary-%s".formatted(uniqueSuffix()), "INCOME");
         JsonNode transaction = createTransaction(userToken, categoryId, "Salary", "1500.00",
                 UUID.fromString(user.get("id").asText()), "PIX");
 

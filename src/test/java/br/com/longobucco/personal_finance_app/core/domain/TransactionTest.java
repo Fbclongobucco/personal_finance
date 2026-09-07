@@ -4,8 +4,10 @@ import br.com.longobucco.personal_finance_app.core.exception.InvalidTransactionE
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
-import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.util.UUID;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -13,144 +15,156 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class TransactionTest {
 
-    private static final LocalDate TODAY = LocalDate.now();
+    private final UUID userId = UUID.randomUUID();
 
-    private User validUser() {
-        return User.createUser("John Doe", "john.doe@example.com", "11987654321", "secret123",
-                new BigDecimal("100.00"));
-    }
-
-    private Category validCategory() {
-        return Category.createCategory("Salary", Category.Type.INCOME);
+    private Category incomeCategory() {
+        return Category.createCategory("Salary", Category.Type.INCOME, userId);
     }
 
     private Category expenseCategory() {
-        return Category.createCategory("Rent", Category.Type.EXPENSE);
+        return Category.createCategory("Rent", Category.Type.EXPENSE, userId);
     }
 
     @Test
-    void createsTransactionWithValidDataAndRegistersItOnUser() {
-        User user = validUser();
-        Category category = validCategory();
+    void createsTransactionWithValidData() {
+        Category category = incomeCategory();
 
-        Transaction transaction = Transaction.create("Salary", category, new BigDecimal("50.00"), user,
+        Transaction transaction = Transaction.create("Salary", category, new BigDecimal("50.00"), userId,
                 Transaction.PaymentMethod.PIX);
 
         assertNotNull(transaction.getId());
-        assertTrue(user.getTransactions().contains(transaction));
+        assertEquals("Salary", transaction.getDescription());
+        assertEquals(category, transaction.getCategory());
+        assertEquals(userId, transaction.getUserId());
+        assertEquals(Transaction.PaymentMethod.PIX, transaction.getPaymentMethod());
     }
 
     @Test
     void throwsWhenDescriptionIsBlank() {
-        User user = validUser();
-        Category category = validCategory();
+        Category category = incomeCategory();
 
         assertThrows(InvalidTransactionException.class,
-                () -> Transaction.create(" ", category, new BigDecimal("50.00"), user, Transaction.PaymentMethod.PIX));
+                () -> Transaction.create(" ", category, new BigDecimal("50.00"), userId, Transaction.PaymentMethod.PIX));
     }
 
     @Test
     void throwsWhenCategoryIsNull() {
-        User user = validUser();
-
         assertThrows(InvalidTransactionException.class,
-                () -> Transaction.create("Salary", null, new BigDecimal("50.00"), user, Transaction.PaymentMethod.PIX));
+                () -> Transaction.create("Salary", null, new BigDecimal("50.00"), userId, Transaction.PaymentMethod.PIX));
     }
 
     @Test
     void throwsWhenAmountIsNull() {
-        User user = validUser();
-        Category category = validCategory();
+        Category category = incomeCategory();
 
         assertThrows(InvalidTransactionException.class,
-                () -> Transaction.create("Salary", category, null, user, Transaction.PaymentMethod.PIX));
+                () -> Transaction.create("Salary", category, null, userId, Transaction.PaymentMethod.PIX));
     }
 
     @Test
     void throwsWhenAmountIsZero() {
-        User user = validUser();
-        Category category = validCategory();
+        Category category = incomeCategory();
 
         assertThrows(InvalidTransactionException.class,
-                () -> Transaction.create("Salary", category, BigDecimal.ZERO, user, Transaction.PaymentMethod.PIX));
+                () -> Transaction.create("Salary", category, BigDecimal.ZERO, userId, Transaction.PaymentMethod.PIX));
     }
 
     @Test
     void throwsWhenAmountIsNegative() {
-        User user = validUser();
-        Category category = validCategory();
+        Category category = incomeCategory();
 
         assertThrows(InvalidTransactionException.class,
-                () -> Transaction.create("Salary", category, new BigDecimal("-10.00"), user, Transaction.PaymentMethod.PIX));
+                () -> Transaction.create("Salary", category, new BigDecimal("-10.00"), userId,
+                        Transaction.PaymentMethod.PIX));
     }
 
     @Test
-    void throwsWhenUserIsNull() {
-        Category category = validCategory();
+    void throwsWhenUserIdIsNull() {
+        Category category = incomeCategory();
 
         assertThrows(InvalidTransactionException.class,
-                () -> Transaction.create("Salary", category, new BigDecimal("50.00"), null, Transaction.PaymentMethod.PIX));
+                () -> Transaction.create("Salary", category, new BigDecimal("50.00"), null,
+                        Transaction.PaymentMethod.PIX));
     }
 
     @Test
     void throwsWhenPaymentMethodIsNull() {
-        User user = validUser();
-        Category category = validCategory();
+        Category category = incomeCategory();
 
         assertThrows(InvalidTransactionException.class,
-                () -> Transaction.create("Salary", category, new BigDecimal("50.00"), user, null));
+                () -> Transaction.create("Salary", category, new BigDecimal("50.00"), userId, null));
+    }
+
+    @Test
+    void throwsWhenCategoryBelongsToAnotherUser() {
+        Category othersCategory = Category.createCategory("Salary", Category.Type.INCOME, UUID.randomUUID());
+
+        assertThrows(InvalidTransactionException.class,
+                () -> Transaction.create("Salary", othersCategory, new BigDecimal("50.00"), userId,
+                        Transaction.PaymentMethod.PIX));
+    }
+
+    @Test
+    void recoverAlsoRejectsACategoryFromAnotherUser() {
+        Category othersCategory = Category.createCategory("Salary", Category.Type.INCOME, UUID.randomUUID());
+        LocalDateTime now = LocalDateTime.now();
+
+        assertThrows(InvalidTransactionException.class,
+                () -> Transaction.recover(UUID.randomUUID(), "Salary", othersCategory, new BigDecimal("50.00"),
+                        userId, now, now, Transaction.PaymentMethod.PIX));
     }
 
     @Test
     void incomeTransactionIsAlwaysPaid() {
-        User user = validUser();
-        Category category = validCategory();
-
-        Transaction transaction = Transaction.create("Salary", category, new BigDecimal("50.00"), user,
+        Transaction transaction = Transaction.create("Salary", incomeCategory(), new BigDecimal("50.00"), userId,
                 Transaction.PaymentMethod.PIX);
 
         assertTrue(transaction.isPaid());
     }
 
     @Test
-    void expenseTransactionStartsUnpaidByDefault() {
-        User user = validUser();
-        Category category = expenseCategory();
+    void incomeStaysPaidEvenWhenExplicitlyCreatedUnpaid() {
+        Transaction transaction = Transaction.create("Salary", incomeCategory(), new BigDecimal("50.00"), userId,
+                Transaction.PaymentMethod.PIX, false);
 
-        Transaction transaction = Transaction.create("Rent", category, new BigDecimal("30.00"), user,
+        assertTrue(transaction.isPaid());
+    }
+
+    @Test
+    void expenseTransactionStartsUnpaid() {
+        Transaction transaction = Transaction.create("Rent", expenseCategory(), new BigDecimal("30.00"), userId,
                 Transaction.PaymentMethod.CASH);
 
         assertFalse(transaction.isPaid());
     }
 
     @Test
-    void expenseTransactionCanBeCreatedAlreadyPaid() {
-        User user = validUser();
-        Category category = expenseCategory();
-
-        Transaction transaction = Transaction.create("Rent", category, new BigDecimal("30.00"), user,
-                Transaction.PaymentMethod.CASH, true);
-
-        assertTrue(transaction.isPaid());
-    }
-
-    @Test
-    void settleMarksExpenseAsPaid() {
-        User user = validUser();
-        Category category = expenseCategory();
-        Transaction transaction = Transaction.create("Rent", category, new BigDecimal("30.00"), user,
-                Transaction.PaymentMethod.CASH);
+    void settleMarksAnExpenseAsPaidAndTouchesUpdatedAt() {
+        LocalDateTime createdAt = LocalDateTime.of(2026, 1, 1, 0, 0);
+        Transaction transaction = Transaction.recover(UUID.randomUUID(), "Rent", expenseCategory(),
+                new BigDecimal("30.00"), userId, createdAt, createdAt, Transaction.PaymentMethod.CASH, false);
 
         transaction.settle();
 
         assertTrue(transaction.isPaid());
+        assertTrue(transaction.getUpdatedAt().isAfter(createdAt));
     }
 
     @Test
-    void settlingAnIncomeTransactionThrows() {
-        User user = validUser();
-        Category category = validCategory();
-        Transaction transaction = Transaction.create("Salary", category, new BigDecimal("50.00"), user,
+    void settlingAnAlreadySettledExpenseLeavesUpdatedAtAlone() {
+        LocalDateTime createdAt = LocalDateTime.of(2026, 1, 1, 0, 0);
+        Transaction transaction = Transaction.recover(UUID.randomUUID(), "Rent", expenseCategory(),
+                new BigDecimal("30.00"), userId, createdAt, createdAt, Transaction.PaymentMethod.CASH, true);
+
+        transaction.settle();
+
+        assertTrue(transaction.isPaid());
+        assertEquals(createdAt, transaction.getUpdatedAt());
+    }
+
+    @Test
+    void settleThrowsForAnIncomeTransaction() {
+        Transaction transaction = Transaction.create("Salary", incomeCategory(), new BigDecimal("50.00"), userId,
                 Transaction.PaymentMethod.PIX);
 
         assertThrows(InvalidTransactionException.class, transaction::settle);

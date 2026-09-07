@@ -7,5 +7,6 @@ import java.time.LocalDate;
 import java.util.UUID;
 
 public record UserResponseDto(UUID id, String name, String email, String phone,
-                              User.Role role, BigDecimal balance, LocalDate createdAt, LocalDate updatedAt) {
+                              User.Role role, BigDecimal balance, BigDecimal settledBalance,
+                              LocalDate createdAt, LocalDate updatedAt) {
 }
