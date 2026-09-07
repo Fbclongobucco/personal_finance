@@ -8,7 +8,9 @@ import br.com.longobucco.personal_finance_app.application.exception.UserNotFound
 import br.com.longobucco.personal_finance_app.core.domain.Category;
 import br.com.longobucco.personal_finance_app.core.domain.Transaction;
 import br.com.longobucco.personal_finance_app.core.domain.User;
+import br.com.longobucco.personal_finance_app.core.repository.TransactionRepository;
 import br.com.longobucco.personal_finance_app.core.repository.UserRepository;
+import br.com.longobucco.personal_finance_app.core.security.PasswordHasher;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -23,7 +25,6 @@ import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -35,11 +36,17 @@ class UserUseCaseTest {
     @Mock
     private UserRepository userRepository;
 
+    @Mock
+    private TransactionRepository transactionRepository;
+
+    @Mock
+    private PasswordHasher passwordHasher;
+
     private UserUseCase userUseCase;
 
     @BeforeEach
     void setUp() {
-        userUseCase = new UserUseCase(userRepository);
+        userUseCase = new UserUseCase(userRepository, transactionRepository, passwordHasher);
     }
 
     private User validUser() {
@@ -52,9 +59,15 @@ class UserUseCaseTest {
                 new BigDecimal("100.00"));
     }
 
+    private Transaction transactionFor(User user, Category category, BigDecimal amount, LocalDateTime date) {
+        return Transaction.recover(UUID.randomUUID(), "Transaction", category, amount, user, date, date,
+                Transaction.PaymentMethod.CASH);
+    }
+
     @Test
     void createUserSavesAndReturnsUserWhenEmailNotInUse() {
         when(userRepository.existsByEmail("john.doe@example.com")).thenReturn(false);
+        when(passwordHasher.hash("secret123")).thenReturn("hashed:secret123");
         when(userRepository.save(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         UserResponseDto result = userUseCase.createUser(validRequestDto());
@@ -128,12 +141,13 @@ class UserUseCaseTest {
     }
 
     @Test
-    void getUserTransactionsReturnsAllMappedTransactions() {
+    void getUserTransactionsReturnsAllMappedTransactionsFromRepository() {
         User user = validUser();
         Category category = Category.createCategory("Salary", Category.Type.INCOME);
-        Transaction transaction = Transaction.create("Salary", category, new BigDecimal("50.00"), user,
-                Transaction.PaymentMethod.PIX);
+        Transaction transaction = transactionFor(user, category, new BigDecimal("50.00"),
+                LocalDateTime.of(2026, 1, 15, 10, 0));
         when(userRepository.findById(user.getId())).thenReturn(Optional.of(user));
+        when(transactionRepository.findByUser(user)).thenReturn(List.of(transaction));
 
         List<TransactionResponseDto> result = userUseCase.getUserTransactions(user.getId());
 
@@ -142,79 +156,74 @@ class UserUseCaseTest {
     }
 
     @Test
-    void getUserTransactionsBetweenReturnsOnlyTransactionsWithinRange() {
+    void getUserTransactionsBetweenDelegatesToTransactionRepository() {
         User user = validUser();
         Category category = Category.createCategory("Rent", Category.Type.EXPENSE);
-        Transaction inRange = Transaction.recover(UUID.randomUUID(), "Rent", category, new BigDecimal("30.00"),
-                user, LocalDateTime.of(2026, 1, 15, 10, 0), LocalDateTime.of(2026, 1, 15, 10, 0),
-                Transaction.PaymentMethod.CASH);
-        Transaction.recover(UUID.randomUUID(), "Rent", category, new BigDecimal("40.00"), user,
-                LocalDateTime.of(2026, 3, 1, 10, 0), LocalDateTime.of(2026, 3, 1, 10, 0),
-                Transaction.PaymentMethod.CASH);
+        Transaction inRange = transactionFor(user, category, new BigDecimal("30.00"),
+                LocalDateTime.of(2026, 1, 15, 10, 0));
+        LocalDateTime start = LocalDateTime.of(2026, 1, 1, 0, 0);
+        LocalDateTime end = LocalDateTime.of(2026, 1, 31, 23, 59);
         when(userRepository.findById(user.getId())).thenReturn(Optional.of(user));
+        when(transactionRepository.findByUserAndCreatedAtBetween(user, start, end)).thenReturn(List.of(inRange));
 
-        List<TransactionResponseDto> result = userUseCase.getUserTransactionsBetween(user.getId(),
-                LocalDateTime.of(2026, 1, 1, 0, 0), LocalDateTime.of(2026, 1, 31, 23, 59));
+        List<TransactionResponseDto> result = userUseCase.getUserTransactionsBetween(user.getId(), start, end);
 
         assertEquals(1, result.size());
         assertEquals(inRange.getId(), result.get(0).id());
     }
 
     @Test
-    void getUserTransactionsByTypeBetweenReturnsOnlyMatchingType() {
+    void getUserTransactionsByTypeBetweenDelegatesToTransactionRepository() {
         User user = validUser();
         Category income = Category.createCategory("Salary", Category.Type.INCOME);
-        Category expense = Category.createCategory("Rent", Category.Type.EXPENSE);
         LocalDateTime date = LocalDateTime.of(2026, 1, 15, 10, 0);
-        Transaction salary = Transaction.recover(UUID.randomUUID(), "Salary", income, new BigDecimal("1000.00"),
-                user, date, date, Transaction.PaymentMethod.PIX);
-        Transaction.recover(UUID.randomUUID(), "Rent", expense, new BigDecimal("30.00"), user, date, date,
-                Transaction.PaymentMethod.CASH);
+        Transaction salary = transactionFor(user, income, new BigDecimal("1000.00"), date);
+        LocalDateTime start = LocalDateTime.of(2026, 1, 1, 0, 0);
+        LocalDateTime end = LocalDateTime.of(2026, 1, 31, 23, 59);
         when(userRepository.findById(user.getId())).thenReturn(Optional.of(user));
+        when(transactionRepository.findByUserAndCategoryTypeAndCreatedAtBetween(user, Category.Type.INCOME, start, end))
+                .thenReturn(List.of(salary));
 
         List<TransactionResponseDto> result = userUseCase.getUserTransactionsByTypeBetween(user.getId(),
-                Category.Type.INCOME, LocalDateTime.of(2026, 1, 1, 0, 0), LocalDateTime.of(2026, 1, 31, 23, 59));
+                Category.Type.INCOME, start, end);
 
         assertEquals(1, result.size());
         assertEquals(salary.getId(), result.get(0).id());
     }
 
     @Test
-    void getUserExpensesBetweenReturnsOnlyExpenses() {
+    void getUserExpensesBetweenDelegatesToTransactionRepositoryWithExpenseType() {
         User user = validUser();
-        Category income = Category.createCategory("Salary", Category.Type.INCOME);
         Category expense = Category.createCategory("Rent", Category.Type.EXPENSE);
         LocalDateTime date = LocalDateTime.of(2026, 1, 15, 10, 0);
-        Transaction.recover(UUID.randomUUID(), "Salary", income, new BigDecimal("1000.00"), user, date, date,
-                Transaction.PaymentMethod.PIX);
-        Transaction rent = Transaction.recover(UUID.randomUUID(), "Rent", expense, new BigDecimal("30.00"), user,
-                date, date, Transaction.PaymentMethod.CASH);
+        Transaction rent = transactionFor(user, expense, new BigDecimal("30.00"), date);
+        LocalDateTime start = LocalDateTime.of(2026, 1, 1, 0, 0);
+        LocalDateTime end = LocalDateTime.of(2026, 1, 31, 23, 59);
         when(userRepository.findById(user.getId())).thenReturn(Optional.of(user));
+        when(transactionRepository.findByUserAndCategoryTypeAndCreatedAtBetween(user, Category.Type.EXPENSE, start, end))
+                .thenReturn(List.of(rent));
 
-        List<TransactionResponseDto> result = userUseCase.getUserExpensesBetween(user.getId(),
-                LocalDateTime.of(2026, 1, 1, 0, 0), LocalDateTime.of(2026, 1, 31, 23, 59));
+        List<TransactionResponseDto> result = userUseCase.getUserExpensesBetween(user.getId(), start, end);
 
         assertEquals(1, result.size());
         assertEquals(rent.getId(), result.get(0).id());
     }
 
     @Test
-    void getUserIncomesBetweenReturnsOnlyIncomes() {
+    void getUserIncomesBetweenDelegatesToTransactionRepositoryWithIncomeType() {
         User user = validUser();
         Category income = Category.createCategory("Salary", Category.Type.INCOME);
-        Category expense = Category.createCategory("Rent", Category.Type.EXPENSE);
         LocalDateTime date = LocalDateTime.of(2026, 1, 15, 10, 0);
-        Transaction salary = Transaction.recover(UUID.randomUUID(), "Salary", income, new BigDecimal("1000.00"),
-                user, date, date, Transaction.PaymentMethod.PIX);
-        Transaction.recover(UUID.randomUUID(), "Rent", expense, new BigDecimal("30.00"), user, date, date,
-                Transaction.PaymentMethod.CASH);
+        Transaction salary = transactionFor(user, income, new BigDecimal("1000.00"), date);
+        LocalDateTime start = LocalDateTime.of(2026, 1, 1, 0, 0);
+        LocalDateTime end = LocalDateTime.of(2026, 1, 31, 23, 59);
         when(userRepository.findById(user.getId())).thenReturn(Optional.of(user));
+        when(transactionRepository.findByUserAndCategoryTypeAndCreatedAtBetween(user, Category.Type.INCOME, start, end))
+                .thenReturn(List.of(salary));
 
-        List<TransactionResponseDto> result = userUseCase.getUserIncomesBetween(user.getId(),
-                LocalDateTime.of(2026, 1, 1, 0, 0), LocalDateTime.of(2026, 1, 31, 23, 59));
+        List<TransactionResponseDto> result = userUseCase.getUserIncomesBetween(user.getId(), start, end);
 
         assertEquals(1, result.size());
         assertEquals(salary.getId(), result.get(0).id());
-        assertTrue(result.stream().noneMatch(dto -> dto.category().type() == Category.Type.EXPENSE));
     }
 }
