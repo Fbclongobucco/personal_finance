@@ -110,11 +110,11 @@ public class User {
         this.balance = transaction.getCategory().getType().apply(balance, transaction.getAmount());
     }
 
-    public static User createUser(String name, String email, String phone, String password, BigDecimal initialBalance,
-                                 LocalDate createdAt, LocalDate updatedAt) {
+    public static User createUser(String name, String email, String phone, String password, BigDecimal initialBalance) {
         UUID id = UUID.randomUUID();
         Role role = Role.USER;
-        return new User(id, name, email, phone, password, role, initialBalance, createdAt, updatedAt);
+        LocalDate createdAt = LocalDate.now();
+        return new User(id, name, email, phone, password, role, initialBalance, createdAt, createdAt);
     }
 
 

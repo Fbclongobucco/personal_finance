@@ -16,7 +16,7 @@ class TransactionTest {
 
     private User validUser() {
         return User.createUser("John Doe", "john.doe@example.com", "11987654321", "secret123",
-                new BigDecimal("100.00"), TODAY, TODAY);
+                new BigDecimal("100.00"));
     }
 
     private Category validCategory() {

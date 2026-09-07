@@ -22,7 +22,7 @@ class UserTest {
 
     private User validUser() {
         return User.createUser("John Doe", "john.doe@example.com", "11987654321", "secret123",
-                new BigDecimal("100.00"), TODAY, TODAY);
+                new BigDecimal("100.00"));
     }
 
     @Test
@@ -50,41 +50,41 @@ class UserTest {
     void throwsWhenNameIsBlank() {
         assertThrows(InvalidUserException.class,
                 () -> User.createUser(" ", "john.doe@example.com", "11987654321", "secret123",
-                        BigDecimal.ZERO, TODAY, TODAY));
+                        BigDecimal.ZERO));
     }
 
     @Test
     void throwsWhenEmailIsNull() {
         assertThrows(InvalidUserException.class,
                 () -> User.createUser("John Doe", null, "11987654321", "secret123",
-                        BigDecimal.ZERO, TODAY, TODAY));
+                        BigDecimal.ZERO));
     }
 
     @Test
     void throwsWhenEmailFormatIsInvalid() {
         assertThrows(InvalidUserException.class,
                 () -> User.createUser("John Doe", "not-an-email", "11987654321", "secret123",
-                        BigDecimal.ZERO, TODAY, TODAY));
+                        BigDecimal.ZERO));
     }
 
     @Test
     void throwsWhenPhoneIsNull() {
         assertThrows(InvalidUserException.class,
                 () -> User.createUser("John Doe", "john.doe@example.com", null, "secret123",
-                        BigDecimal.ZERO, TODAY, TODAY));
+                        BigDecimal.ZERO));
     }
 
     @Test
     void throwsWhenPhoneHasTooFewDigits() {
         assertThrows(InvalidUserException.class,
                 () -> User.createUser("John Doe", "john.doe@example.com", "1234", "secret123",
-                        BigDecimal.ZERO, TODAY, TODAY));
+                        BigDecimal.ZERO));
     }
 
     @Test
     void acceptsPhoneWithFormattingCharacters() {
         User user = User.createUser("John Doe", "john.doe@example.com", "(11) 98765-4321", "secret123",
-                BigDecimal.ZERO, TODAY, TODAY);
+                BigDecimal.ZERO);
 
         assertEquals("(11) 98765-4321", user.getPhone());
     }
@@ -93,14 +93,14 @@ class UserTest {
     void throwsWhenPasswordIsBlank() {
         assertThrows(InvalidUserException.class,
                 () -> User.createUser("John Doe", "john.doe@example.com", "11987654321", " ",
-                        BigDecimal.ZERO, TODAY, TODAY));
+                        BigDecimal.ZERO));
     }
 
     @Test
     void throwsWhenInitialBalanceIsNull() {
         assertThrows(InvalidUserException.class,
                 () -> User.createUser("John Doe", "john.doe@example.com", "11987654321", "secret123",
-                        null, TODAY, TODAY));
+                        null));
     }
 
     @Test
