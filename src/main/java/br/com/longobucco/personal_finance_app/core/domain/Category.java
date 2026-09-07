@@ -29,6 +29,11 @@ public class Category {
         };
 
         public abstract BigDecimal apply(BigDecimal balance, BigDecimal amount);
+
+        /** Undoes {@link #apply}, for reversing a transaction that is being removed. */
+        public BigDecimal reverse(BigDecimal balance, BigDecimal amount) {
+            return apply(balance, amount.negate());
+        }
     }
     private Category(UUID id, String name, Type type, LocalDateTime createdAt, LocalDateTime updatedAt){
         validate(name, type);

@@ -4,6 +4,8 @@ import tools.jackson.databind.JsonNode;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
 
+import java.util.UUID;
+
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -204,5 +206,68 @@ class UserControllerIntegrationTest extends AbstractControllerIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$").isArray())
                 .andExpect(jsonPath("$.length()").value(0));
+    }
+
+    @Test
+    void balanceReflectsIncomeTransactionAfterPersisting() throws Exception {
+        String adminToken = adminAccessToken();
+        UUID categoryId = createCategory(adminToken, "Salary-%s".formatted(uniqueSuffix()), "INCOME");
+        JsonNode user = createUser(adminToken, "Earner", "earner-%s@example.com".formatted(uniqueSuffix()));
+        String userToken = login(user.get("email").asText(), "secret123");
+        UUID userId = UUID.fromString(user.get("id").asText());
+
+        createTransaction(userToken, categoryId, "Salary", "50.00", userId, "PIX");
+
+        mockMvc.perform(get("/api/users/" + userId)
+                        .header("Authorization", "Bearer " + userToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.balance").value(150.00));
+    }
+
+    @Test
+    void balanceReflectsExpenseTransactionAfterPersisting() throws Exception {
+        String adminToken = adminAccessToken();
+        UUID categoryId = createCategory(adminToken, "Rent-%s".formatted(uniqueSuffix()), "EXPENSE");
+        JsonNode user = createUser(adminToken, "Payer3", "payer3-%s@example.com".formatted(uniqueSuffix()));
+        String userToken = login(user.get("email").asText(), "secret123");
+        UUID userId = UUID.fromString(user.get("id").asText());
+
+        createTransaction(userToken, categoryId, "Rent", "30.00", userId, "CASH");
+
+        mockMvc.perform(get("/api/users/" + userId)
+                        .header("Authorization", "Bearer " + userToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.balance").value(70.00));
+    }
+
+    @Test
+    void balanceIsReversedAndTransactionsSurviveAfterDeletingOneOfSeveral() throws Exception {
+        String adminToken = adminAccessToken();
+        UUID categoryId = createCategory(adminToken, "Salary-%s".formatted(uniqueSuffix()), "INCOME");
+        JsonNode user = createUser(adminToken, "MultiTx", "multitx-%s@example.com".formatted(uniqueSuffix()));
+        String userToken = login(user.get("email").asText(), "secret123");
+        UUID userId = UUID.fromString(user.get("id").asText());
+
+        createTransaction(userToken, categoryId, "Salary 1", "50.00", userId, "PIX");
+        JsonNode second = createTransaction(userToken, categoryId, "Salary 2", "20.00", userId, "PIX");
+
+        mockMvc.perform(get("/api/users/" + userId)
+                        .header("Authorization", "Bearer " + userToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.balance").value(170.00));
+
+        mockMvc.perform(delete("/api/transactions/" + second.get("id").asText())
+                        .header("Authorization", "Bearer " + userToken))
+                .andExpect(status().isNoContent());
+
+        mockMvc.perform(get("/api/users/" + userId)
+                        .header("Authorization", "Bearer " + userToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.balance").value(150.00));
+
+        mockMvc.perform(get("/api/users/" + userId + "/transactions")
+                        .header("Authorization", "Bearer " + userToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1));
     }
 }

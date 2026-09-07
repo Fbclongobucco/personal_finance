@@ -53,4 +53,18 @@ class CategoryTest {
 
         assertEquals(new BigDecimal("50"), result);
     }
+
+    @Test
+    void reverseUndoesIncomeApply() {
+        BigDecimal result = Category.Type.INCOME.reverse(new BigDecimal("150"), new BigDecimal("50"));
+
+        assertEquals(new BigDecimal("100"), result);
+    }
+
+    @Test
+    void reverseUndoesExpenseApply() {
+        BigDecimal result = Category.Type.EXPENSE.reverse(new BigDecimal("50"), new BigDecimal("50"));
+
+        assertEquals(new BigDecimal("100"), result);
+    }
 }

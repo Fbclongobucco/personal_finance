@@ -105,9 +105,24 @@ public class User {
         return updatedAt;
     }
 
+    /** Applies a newly created transaction's effect on the balance. */
     public void addTransaction(Transaction transaction) {
-        this.transactions.add(transaction);
+        attachTransaction(transaction);
         this.balance = transaction.getCategory().getType().apply(balance, transaction.getAmount());
+    }
+
+    /**
+     * Re-attaches a transaction already reflected in the persisted balance (e.g. when reconstructing
+     * from storage) without re-applying its effect a second time.
+     */
+    public void attachTransaction(Transaction transaction) {
+        this.transactions.add(transaction);
+    }
+
+    /** Reverses a transaction's effect on the balance, e.g. when it is being deleted. */
+    public void removeTransaction(Transaction transaction) {
+        this.transactions.remove(transaction);
+        this.balance = transaction.getCategory().getType().reverse(balance, transaction.getAmount());
     }
 
     public static User createUser(String name, String email, String phone, String password, BigDecimal initialBalance) {

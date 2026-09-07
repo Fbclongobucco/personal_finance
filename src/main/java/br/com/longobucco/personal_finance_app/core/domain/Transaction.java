@@ -111,7 +111,8 @@ public class Transaction {
                                       PaymentMethod paymentMethod, boolean paid){
         Transaction transaction = new Transaction(id, description, category, amount, user, createdAt, updatedAt,
                 paymentMethod, paid);
-        user.addTransaction(transaction);
+        // The user's persisted balance already reflects this transaction — don't re-apply it.
+        user.attachTransaction(transaction);
         return transaction;
     }
 

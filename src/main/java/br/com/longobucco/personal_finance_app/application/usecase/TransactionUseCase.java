@@ -38,6 +38,7 @@ public class TransactionUseCase {
 
         Transaction transaction = TransactionMapper.toDomain(transactionRequestDto, user, category);
         Transaction savedTransaction = transactionRepository.save(transaction);
+        userRepository.save(user);
         return TransactionMapper.toResponseDto(savedTransaction);
     }
 
@@ -73,7 +74,9 @@ public class TransactionUseCase {
     public void deleteTransaction(UUID id) {
         Transaction transaction = transactionRepository.findById(id)
                 .orElseThrow(() -> TransactionNotFoundException.withId(id));
+        transaction.getUser().removeTransaction(transaction);
         transactionRepository.delete(transaction);
+        userRepository.save(transaction.getUser());
     }
 
     /** Marks an EXPENSE transaction as settled ("dar baixa"). */

@@ -79,6 +79,38 @@ class TransactionUseCaseTest {
     }
 
     @Test
+    void createTransactionPersistsUserWithUpdatedBalance() {
+        User user = validUser();
+        Category income = validCategory();
+        TransactionRequestDto dto = new TransactionRequestDto("Salary", income.getId(), new BigDecimal("50.00"),
+                user.getId(), Transaction.PaymentMethod.PIX);
+        when(userRepository.findById(user.getId())).thenReturn(Optional.of(user));
+        when(categoryRepository.findById(income.getId())).thenReturn(Optional.of(income));
+        when(transactionRepository.save(any(Transaction.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        transactionUseCase.createTransaction(dto);
+
+        assertEquals(new BigDecimal("150.00"), user.getBalance());
+        verify(userRepository).save(user);
+    }
+
+    @Test
+    void createExpenseTransactionPersistsDecreasedUserBalance() {
+        User user = validUser();
+        Category expense = Category.createCategory("Rent", Category.Type.EXPENSE);
+        TransactionRequestDto dto = new TransactionRequestDto("Rent", expense.getId(), new BigDecimal("30.00"),
+                user.getId(), Transaction.PaymentMethod.CASH);
+        when(userRepository.findById(user.getId())).thenReturn(Optional.of(user));
+        when(categoryRepository.findById(expense.getId())).thenReturn(Optional.of(expense));
+        when(transactionRepository.save(any(Transaction.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        transactionUseCase.createTransaction(dto);
+
+        assertEquals(new BigDecimal("70.00"), user.getBalance());
+        verify(userRepository).save(user);
+    }
+
+    @Test
     void createTransactionThrowsUserNotFoundExceptionWhenUserMissing() {
         Category category = validCategory();
         UUID userId = UUID.randomUUID();
@@ -194,6 +226,20 @@ class TransactionUseCaseTest {
         transactionUseCase.deleteTransaction(transaction.getId());
 
         verify(transactionRepository).delete(transaction);
+    }
+
+    @Test
+    void deleteTransactionReversesBalanceAndPersistsUser() {
+        User user = validUser();
+        Category category = validCategory();
+        Transaction transaction = Transaction.create("Salary", category, new BigDecimal("50.00"), user,
+                Transaction.PaymentMethod.PIX);
+        when(transactionRepository.findById(transaction.getId())).thenReturn(Optional.of(transaction));
+
+        transactionUseCase.deleteTransaction(transaction.getId());
+
+        assertEquals(new BigDecimal("100.00"), user.getBalance());
+        verify(userRepository).save(user);
     }
 
     @Test

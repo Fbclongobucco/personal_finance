@@ -1,20 +1,14 @@
 package br.com.longobucco.personal_finance_app.infra.rest.entities;
 
-import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
-import jakarta.persistence.FetchType;
 import jakarta.persistence.Id;
-import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
-import org.hibernate.annotations.BatchSize;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
 
@@ -43,9 +37,6 @@ public class UserEntity {
 
     @Column(nullable = false, precision = 19, scale = 2)
     private BigDecimal balance;
-
-    @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
-    private List<TransactionEntity> transactions = new ArrayList<>();
 
     @Column(nullable = false)
     private LocalDate createdAt;
@@ -127,14 +118,6 @@ public class UserEntity {
 
     public void setBalance(BigDecimal balance) {
         this.balance = balance;
-    }
-
-    public List<TransactionEntity> getTransactions() {
-        return transactions;
-    }
-
-    public void setTransactions(List<TransactionEntity> transactions) {
-        this.transactions = transactions;
     }
 
     public LocalDate getCreatedAt() {
