@@ -16,8 +16,8 @@ services:
       retries: 10
 
   app:
-    build: .
     image: fblongobucco/personal-finance-app:latest
+    pull_policy: always
     environment:
       SPRING_PROFILES_ACTIVE: postgres
       APP_DB_URL: jdbc:postgresql://db:5432/personal_finance_app
