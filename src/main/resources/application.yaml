@@ -3,6 +3,8 @@ spring:
     name: personal_finance_app
   profiles:
     active: ${SPRING_PROFILES_ACTIVE:h2}
+  autoconfigure:
+    exclude: org.springframework.boot.security.autoconfigure.UserDetailsServiceAutoConfiguration
 
 app:
   jwt:
