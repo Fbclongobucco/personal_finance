@@ -1,5 +1,6 @@
 package br.com.longobucco.personal_finance_app.infra.rest.config;
 
+import br.com.longobucco.personal_finance_app.application.usecase.AuthUseCase;
 import br.com.longobucco.personal_finance_app.application.usecase.CategoryUseCase;
 import br.com.longobucco.personal_finance_app.application.usecase.TransactionUseCase;
 import br.com.longobucco.personal_finance_app.application.usecase.UserUseCase;
@@ -7,6 +8,7 @@ import br.com.longobucco.personal_finance_app.core.repository.CategoryRepository
 import br.com.longobucco.personal_finance_app.core.repository.TransactionRepository;
 import br.com.longobucco.personal_finance_app.core.repository.UserRepository;
 import br.com.longobucco.personal_finance_app.core.security.PasswordHasher;
+import br.com.longobucco.personal_finance_app.core.security.TokenService;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -17,6 +19,12 @@ public class UseCaseConfig {
     public UserUseCase userUseCase(UserRepository userRepository, TransactionRepository transactionRepository,
                                     PasswordHasher passwordHasher) {
         return new UserUseCase(userRepository, transactionRepository, passwordHasher);
+    }
+
+    @Bean
+    public AuthUseCase authUseCase(UserRepository userRepository, PasswordHasher passwordHasher,
+                                    TokenService tokenService) {
+        return new AuthUseCase(userRepository, passwordHasher, tokenService);
     }
 
     @Bean

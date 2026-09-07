@@ -1,28 +1,20 @@
 package br.com.longobucco.personal_finance_app.infra.rest.controllers;
 
-import br.com.longobucco.personal_finance_app.core.domain.User;
-import br.com.longobucco.personal_finance_app.core.repository.UserRepository;
-import br.com.longobucco.personal_finance_app.core.security.PasswordHasher;
-import br.com.longobucco.personal_finance_app.infra.rest.security.JwtService;
-import br.com.longobucco.personal_finance_app.infra.rest.security.LoginRequest;
-import br.com.longobucco.personal_finance_app.infra.rest.security.RefreshRequest;
-import br.com.longobucco.personal_finance_app.infra.rest.security.TokenResponse;
-import io.jsonwebtoken.Claims;
-import io.jsonwebtoken.JwtException;
+import br.com.longobucco.personal_finance_app.application.dto.auth.LoginRequestDto;
+import br.com.longobucco.personal_finance_app.application.dto.auth.RefreshRequestDto;
+import br.com.longobucco.personal_finance_app.application.dto.auth.TokenResponseDto;
+import br.com.longobucco.personal_finance_app.application.usecase.AuthUseCase;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.security.SecurityRequirements;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-
-import java.util.Optional;
 
 @Tag(name = "Auth", description = "Login and token refresh — no authentication required")
 @SecurityRequirements
@@ -30,14 +22,10 @@ import java.util.Optional;
 @RequestMapping("/auth")
 public class AuthController {
 
-    private final UserRepository userRepository;
-    private final PasswordHasher passwordHasher;
-    private final JwtService jwtService;
+    private final AuthUseCase authUseCase;
 
-    public AuthController(UserRepository userRepository, PasswordHasher passwordHasher, JwtService jwtService) {
-        this.userRepository = userRepository;
-        this.passwordHasher = passwordHasher;
-        this.jwtService = jwtService;
+    public AuthController(AuthUseCase authUseCase) {
+        this.authUseCase = authUseCase;
     }
 
     @Operation(summary = "Log in with email and password",
@@ -48,15 +36,8 @@ public class AuthController {
             @ApiResponse(responseCode = "401", description = "Invalid email or password")
     })
     @PostMapping("/login")
-    public ResponseEntity<TokenResponse> login(@Valid @RequestBody LoginRequest request) {
-        Optional<User> user = userRepository.findByEmail(request.email());
-        if (user.isEmpty() || !passwordHasher.matches(request.password(), user.get().getPassword())) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
-        }
-        User authenticated = user.get();
-        TokenResponse tokens = new TokenResponse(jwtService.generateAccessToken(authenticated),
-                jwtService.generateRefreshToken(authenticated));
-        return ResponseEntity.ok(tokens);
+    public ResponseEntity<TokenResponseDto> login(@Valid @RequestBody LoginRequestDto request) {
+        return ResponseEntity.ok(authUseCase.login(request));
     }
 
     @Operation(summary = "Exchange a refresh token for a new access token",
@@ -67,20 +48,7 @@ public class AuthController {
             @ApiResponse(responseCode = "401", description = "Refresh token is missing, expired, invalid or not a refresh token")
     })
     @PostMapping("/refresh")
-    public ResponseEntity<TokenResponse> refresh(@Valid @RequestBody RefreshRequest request) {
-        try {
-            Claims claims = jwtService.parseClaims(request.refreshToken());
-            if (!jwtService.isRefreshToken(claims)) {
-                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
-            }
-            Optional<User> user = userRepository.findByEmail(claims.getSubject());
-            if (user.isEmpty()) {
-                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
-            }
-            String newAccessToken = jwtService.generateAccessToken(user.get());
-            return ResponseEntity.ok(new TokenResponse(newAccessToken, request.refreshToken()));
-        } catch (JwtException | IllegalArgumentException e) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
-        }
+    public ResponseEntity<TokenResponseDto> refresh(@Valid @RequestBody RefreshRequestDto request) {
+        return ResponseEntity.ok(authUseCase.refresh(request.refreshToken()));
     }
 }

@@ -1,6 +1,7 @@
 package br.com.longobucco.personal_finance_app.infra.rest.security;
 
 import br.com.longobucco.personal_finance_app.core.repository.UserRepository;
+import br.com.longobucco.personal_finance_app.core.security.TokenService;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -22,7 +23,7 @@ public class SecurityConfig {
     }
 
     @Bean
-    public SecurityFilterChain securityFilterChain(HttpSecurity http, JwtService jwtService,
+    public SecurityFilterChain securityFilterChain(HttpSecurity http, TokenService tokenService,
                                                     UserRepository userRepository) throws Exception {
         http
                 .csrf(AbstractHttpConfigurer::disable)
@@ -35,7 +36,7 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST, "/api/users").hasRole("ADMIN")
                         .anyRequest().authenticated())
                 .headers(headers -> headers.frameOptions(HeadersConfigurer.FrameOptionsConfig::sameOrigin))
-                .addFilterBefore(new JwtAuthenticationFilter(jwtService, userRepository),
+                .addFilterBefore(new JwtAuthenticationFilter(tokenService, userRepository),
                         UsernamePasswordAuthenticationFilter.class);
         return http.build();
     }

@@ -1,6 +1,7 @@
 package br.com.longobucco.personal_finance_app.infra.rest.controllers;
 
 import br.com.longobucco.personal_finance_app.application.exception.CategoryNotFoundException;
+import br.com.longobucco.personal_finance_app.application.exception.InvalidCredentialsException;
 import br.com.longobucco.personal_finance_app.application.exception.TransactionNotFoundException;
 import br.com.longobucco.personal_finance_app.application.exception.UserAlreadyExistsException;
 import br.com.longobucco.personal_finance_app.application.exception.UserNotFoundException;
@@ -26,6 +27,11 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(UserAlreadyExistsException.class)
     public ProblemDetail handleAlreadyExists(UserAlreadyExistsException ex) {
         return ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, ex.getMessage());
+    }
+
+    @ExceptionHandler(InvalidCredentialsException.class)
+    public ProblemDetail handleInvalidCredentials(InvalidCredentialsException ex) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.UNAUTHORIZED, ex.getMessage());
     }
 
     @ExceptionHandler(DomainException.class)

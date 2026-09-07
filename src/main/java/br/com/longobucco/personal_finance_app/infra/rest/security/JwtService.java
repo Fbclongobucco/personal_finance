@@ -1,7 +1,9 @@
 package br.com.longobucco.personal_finance_app.infra.rest.security;
 
 import br.com.longobucco.personal_finance_app.core.domain.User;
+import br.com.longobucco.personal_finance_app.core.security.TokenService;
 import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.JwtException;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
 import org.springframework.beans.factory.annotation.Value;
@@ -11,9 +13,10 @@ import javax.crypto.SecretKey;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.Date;
+import java.util.Optional;
 
 @Component
-public class JwtService {
+public class JwtService implements TokenService {
 
     private static final String CLAIM_ROLE = "role";
     private static final String CLAIM_TYPE = "type";
@@ -32,28 +35,40 @@ public class JwtService {
         this.refreshTokenExpirationMs = refreshTokenExpirationMs;
     }
 
+    @Override
     public String generateAccessToken(User user) {
         return buildToken(user, accessTokenExpirationMs, TYPE_ACCESS);
     }
 
+    @Override
     public String generateRefreshToken(User user) {
         return buildToken(user, refreshTokenExpirationMs, TYPE_REFRESH);
     }
 
-    public Claims parseClaims(String token) {
-        return Jwts.parser()
-                .verifyWith(key)
-                .build()
-                .parseSignedClaims(token)
-                .getPayload();
+    @Override
+    public Optional<String> extractEmailIfValidAccessToken(String token) {
+        return extractEmailIfType(token, TYPE_ACCESS);
     }
 
-    public boolean isAccessToken(Claims claims) {
-        return TYPE_ACCESS.equals(claims.get(CLAIM_TYPE, String.class));
+    @Override
+    public Optional<String> extractEmailIfValidRefreshToken(String token) {
+        return extractEmailIfType(token, TYPE_REFRESH);
     }
 
-    public boolean isRefreshToken(Claims claims) {
-        return TYPE_REFRESH.equals(claims.get(CLAIM_TYPE, String.class));
+    private Optional<String> extractEmailIfType(String token, String expectedType) {
+        try {
+            Claims claims = Jwts.parser()
+                    .verifyWith(key)
+                    .build()
+                    .parseSignedClaims(token)
+                    .getPayload();
+            if (!expectedType.equals(claims.get(CLAIM_TYPE, String.class))) {
+                return Optional.empty();
+            }
+            return Optional.ofNullable(claims.getSubject());
+        } catch (JwtException | IllegalArgumentException e) {
+            return Optional.empty();
+        }
     }
 
     private String buildToken(User user, long expirationMs, String type) {
