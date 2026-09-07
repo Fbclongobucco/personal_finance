@@ -47,3 +47,21 @@ jobs:
             ${{ env.IMAGE_NAME }}:${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+  deploy:
+    needs: build-and-push
+    runs-on: self-hosted
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Preserve the untracked .env file with production secrets that already
+          # lives in this runner's work directory — a clean checkout would wipe it.
+          clean: false
+
+      - name: Pull latest image and recreate containers
+        run: |
+          docker compose pull app
+          docker compose up -d --remove-orphans
+
+      - name: Remove dangling images
+        run: docker image prune -f
