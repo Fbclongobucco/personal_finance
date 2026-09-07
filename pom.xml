@@ -127,6 +127,12 @@
             <plugin>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
+                <configuration>
+                    <image>
+                        <name>${env.DOCKER_USERNAME}/personal-finance-app:latest</name>
+                        <publish>true</publish>
+                    </image>
+                </configuration>
             </plugin>
         </plugins>
     </build>

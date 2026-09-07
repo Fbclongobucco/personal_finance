@@ -25,6 +25,8 @@ jobs:
         username: ${{secrets.DOCKER_USERNAME}}
         password: ${{secrets.DOCKER_ACESS_TOKEN}}
 
-    - name: Build the Docker image
+    - name: Build and publish the Docker image
       working-directory: .
+      env:
+        DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
       run: mvn spring-boot:build-image -DskipTests
