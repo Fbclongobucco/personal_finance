@@ -13,6 +13,6 @@ app:
     refresh-token-expiration-ms: 604800000
   admin:
     name: Administrator
-    email: ${APP_ADMIN_EMAIL:admin@personalfinance.local}
+    email: ${APP_ADMIN_EMAIL:admin123@personalfinance.local}
     phone: "00000000000"
     password: ${APP_ADMIN_PASSWORD:admin123}
