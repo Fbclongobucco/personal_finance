@@ -6,6 +6,7 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.UUID;
 
 public record TransactionRequestDto(@NotBlank String description,
@@ -13,9 +14,10 @@ public record TransactionRequestDto(@NotBlank String description,
                                     @NotNull @Positive BigDecimal amount,
                                     @NotNull UUID userId,
                                     @NotNull Transaction.PaymentMethod paymentMethod,
-                                    Boolean paid) {
+                                    Boolean paid,
+                                    LocalDateTime date) {
     public TransactionRequestDto(String description, UUID categoryId, BigDecimal amount, UUID userId,
                                  Transaction.PaymentMethod paymentMethod) {
-        this(description, categoryId, amount, userId, paymentMethod, null);
+        this(description, categoryId, amount, userId, paymentMethod, null, null);
     }
 }

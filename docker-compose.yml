@@ -26,6 +26,7 @@ services:
       APP_JWT_SECRET: ${APP_JWT_SECRET:-change-this-secret-before-going-to-production}
       APP_ADMIN_EMAIL: ${APP_ADMIN_EMAIL:-admin@personalfinance.local}
       APP_ADMIN_PASSWORD: ${APP_ADMIN_PASSWORD:-admin123}
+      BPL_JVM_THREAD_COUNT: "50"
     ports:
       - "8080:8080"
     depends_on:

@@ -87,13 +87,24 @@ public class Transaction {
 
     public static Transaction create(String description, Category category, BigDecimal amount,
                                      UUID userId, PaymentMethod paymentMethod){
-        return create(description, category, amount, userId, paymentMethod, defaultPaid(category));
+        return create(description, category, amount, userId, paymentMethod, defaultPaid(category), null);
     }
 
     public static Transaction create(String description, Category category, BigDecimal amount,
                                      UUID userId, PaymentMethod paymentMethod, boolean paid){
+        return create(description, category, amount, userId, paymentMethod, paid, null);
+    }
+
+    public static Transaction create(String description, Category category, BigDecimal amount,
+                                     UUID userId, PaymentMethod paymentMethod, LocalDateTime date){
+        return create(description, category, amount, userId, paymentMethod, defaultPaid(category), date);
+    }
+
+    public static Transaction create(String description, Category category, BigDecimal amount,
+                                     UUID userId, PaymentMethod paymentMethod, boolean paid,
+                                     LocalDateTime date){
         UUID id = UUID.randomUUID();
-        LocalDateTime createdAt = LocalDateTime.now();
+        LocalDateTime createdAt = date != null ? date : LocalDateTime.now();
         return new Transaction(id, description, category, amount, userId, createdAt, createdAt, paymentMethod, paid);
     }
 

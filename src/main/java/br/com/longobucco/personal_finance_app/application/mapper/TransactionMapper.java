@@ -12,10 +12,11 @@ public final class TransactionMapper {
 
     public static Transaction toDomain(TransactionRequestDto dto, Category category) {
         if (dto.paid() == null) {
-            return Transaction.create(dto.description(), category, dto.amount(), dto.userId(), dto.paymentMethod());
+            return Transaction.create(dto.description(), category, dto.amount(), dto.userId(), dto.paymentMethod(),
+                    dto.date());
         }
         return Transaction.create(dto.description(), category, dto.amount(), dto.userId(), dto.paymentMethod(),
-                dto.paid());
+                dto.paid(), dto.date());
     }
 
     public static TransactionResponseDto toResponseDto(Transaction transaction) {
