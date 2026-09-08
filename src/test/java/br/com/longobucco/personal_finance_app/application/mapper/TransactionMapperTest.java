@@ -51,7 +51,7 @@ class TransactionMapperTest {
     void toDomainHonoursAnExplicitPaidFlagOnAnExpense() {
         Category category = ownCategory(Category.Type.EXPENSE);
         TransactionRequestDto dto = new TransactionRequestDto("Rent", category.getId(),
-                new BigDecimal("30.00"), userId, Transaction.PaymentMethod.CASH, true);
+                new BigDecimal("30.00"), userId, Transaction.PaymentMethod.CASH, true, null);
 
         assertTrue(TransactionMapper.toDomain(dto, category).isPaid());
     }
