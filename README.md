@@ -4,7 +4,18 @@ Aplicação para controle de finanças pessoais: cadastro de usuários, categori
 
 ## Status do projeto
 
-🚧 Em desenvolvimento. Até o momento estão implementados o **modelo de domínio**, as **validações de negócio** e os **contratos de repositório**. A API REST, a camada de persistência (JPA) e a autenticação ainda não existem.
+🚧 Em desenvolvimento, com o fluxo principal funcional de ponta a ponta.
+
+Implementado:
+
+- **Domínio e regras de negócio** — `User`, `Category` e `Transaction`, com validação de invariantes e saldo derivado.
+- **Persistência** — entidades JPA e adapters que implementam os contratos do `core`; schema versionado em Flyway.
+- **API REST** — `/auth` (registro, login, refresh) e `/api/users`, `/api/categories`, `/api/transactions`, com tratamento centralizado de erro.
+- **Autenticação e autorização** — Spring Security com JWT (access e refresh token), senha em BCrypt, `AccessGuard` restringindo cada recurso ao seu dono, e bootstrap do usuário administrador.
+- **Documentação da API** — OpenAPI/Swagger UI em `/swagger-ui.html`.
+- **Infraestrutura** — imagem publicada no Docker Hub pelo pipeline de CD, banco na Neon e nginx como proxy reverso.
+
+Testes cobrem domínio, mappers, casos de uso e os controllers (integração via MockMvc).
 
 ## Stack
 
@@ -27,7 +38,7 @@ core
 
 - **`core.domain`** — entidades imutáveis (exceto o saldo, que é estado derivado), criadas apenas por factory methods (`createUser`, `createCategory`, `Transaction.create`, etc.) que validam suas próprias invariantes.
 - **`core.exception`** — uma exception por recurso (`InvalidUserException`, `InvalidCategoryException`, `InvalidTransactionException`), todas estendendo `DomainException`.
-- **`core.repository`** — interfaces (`UserRepository`, `CategoryRepository`, `TransactionRepository`) que descrevem os contratos de persistência; as implementações (JPA/adapters) ficam para a camada de infraestrutura, ainda não criada.
+- **`core.repository`** — interfaces (`UserRepository`, `CategoryRepository`, `TransactionRepository`) que descrevem os contratos de persistência; as implementações vivem em `infra.rest.adapters`, sobre os repositórios JPA.
 
 ### Modelo de domínio
 
@@ -103,7 +114,9 @@ Os testes cobrem as validações de domínio de `User`, `Category` e `Transactio
 
 ## Próximos passos
 
-- Implementar os adapters de persistência (JPA) para os repositórios do `core`
-- Camada de aplicação (casos de uso) e API REST
-- Autenticação/autorização (Spring Security)
-- Migrations com Flyway
+- **Executar os testes no pipeline** — o workflow de CD roda `package -DskipTests`, então nenhuma regressão é barrada antes da publicação da imagem.
+- **Testar contra Postgres** — os testes de integração sobem no profile `h2`; divergências de dialeto e de migration só aparecem em produção. Avaliar Testcontainers ou uma branch descartável da Neon.
+- **Paginar as listagens** — `GET /api/transactions` e `GET /api/categories` retornam a coleção inteira, sem `Pageable` nem filtro por período.
+- **Tratar o ciclo de vida do refresh token** — hoje é stateless: não há persistência, rotação nem revogação, e o logout não invalida token emitido.
+- **Definir o uso de e-mail** — `spring-boot-starter-mail` está declarado no `pom.xml` sem nenhum uso; implementar o fluxo pretendido (recuperação de senha) ou remover a dependência.
+- **Observabilidade** — sem Actuator, health check ou métricas expostas para o nginx e para o monitoramento do container.
