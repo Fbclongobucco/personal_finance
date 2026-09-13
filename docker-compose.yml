@@ -1,37 +1,16 @@
 services:
-  db:
-    image: postgres:17-alpine
-    environment:
-      POSTGRES_DB: personal_finance_app
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-    volumes:
-      - db-data:/var/lib/postgresql/data
-    ports:
-      - "5432:5432"
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
-      interval: 5s
-      timeout: 5s
-      retries: 10
-
   app:
     image: fblongobucco/personal-finance-app:latest
     pull_policy: always
     environment:
       SPRING_PROFILES_ACTIVE: postgres
-      APP_DB_URL: jdbc:postgresql://db:5432/personal_finance_app
-      APP_DB_USERNAME: postgres
-      APP_DB_PASSWORD: postgres
-      APP_JWT_SECRET: ${APP_JWT_SECRET:-change-this-secret-before-going-to-production}
+      APP_DB_URL: ${APP_DB_URL:?defina APP_DB_URL no .env}
+      APP_DB_USERNAME: ${APP_DB_USERNAME:?defina APP_DB_USERNAME no .env}
+      APP_DB_PASSWORD: ${APP_DB_PASSWORD:?defina APP_DB_PASSWORD no .env}
+      APP_JWT_SECRET: ${APP_JWT_SECRET:?defina APP_JWT_SECRET no .env}
       APP_ADMIN_EMAIL: ${APP_ADMIN_EMAIL:-admin@personalfinance.local}
       APP_ADMIN_PASSWORD: ${APP_ADMIN_PASSWORD:-admin123}
       BPL_JVM_THREAD_COUNT: "50"
     ports:
       - "8080:8080"
-    depends_on:
-      db:
-        condition: service_healthy
-
-volumes:
-  db-data:
+    restart: unless-stopped
